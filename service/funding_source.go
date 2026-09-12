@@ -134,9 +134,10 @@ func (w *WalletFunding) Refund() error {
 
 func (w *WalletFunding) SetCheckinEligible(value bool) { w.checkinEligible = value }
 
-// ReserveAdditional applies the same source priority as the initial pre-consume
-// while allowing the wallet portion to go negative for post-estimate settlement.
-func (w *WalletFunding) ReserveAdditional(amount int) error {
+// ReserveAdditional applies the same source priority as the initial pre-consume.
+// When requireAvailableQuota is false, the wallet portion may go negative for
+// post-estimate settlement; otherwise the wallet reservation is atomic.
+func (w *WalletFunding) ReserveAdditional(amount int, requireAvailableQuota bool) error {
 	w.lastReserveCheckin = 0
 	w.lastReserveWallet = 0
 	if amount <= 0 {
@@ -151,7 +152,19 @@ func (w *WalletFunding) ReserveAdditional(amount int) error {
 	if remaining == 0 {
 		return nil
 	}
-	if err := model.DecreaseUserQuota(w.userId, remaining, false); err != nil {
+	if requireAvailableQuota {
+		reserved, err := model.TryReserveUserQuota(w.userId, remaining)
+		if err != nil {
+			w.restoreCheckinCredit(w.lastReserveCheckin)
+			w.lastReserveCheckin = 0
+			return err
+		}
+		if !reserved {
+			w.restoreCheckinCredit(w.lastReserveCheckin)
+			w.lastReserveCheckin = 0
+			return ErrInsufficientWalletQuota
+		}
+	} else if err := model.DecreaseUserQuota(w.userId, remaining, false); err != nil {
 		w.restoreCheckinCredit(w.lastReserveCheckin)
 		w.lastReserveCheckin = 0
 		return err

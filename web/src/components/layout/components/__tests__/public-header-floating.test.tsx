@@ -39,6 +39,9 @@ vi.mock('@/components/profile-dropdown', () => ({
   ProfileDropdown: () => null,
 }))
 vi.mock('@/components/theme-switch', () => ({ ThemeSwitch: () => null }))
+vi.mock('@/features/system-update/system-update-action', () => ({
+  SystemUpdateAction: () => null,
+}))
 vi.mock('@/hooks/use-notifications', () => ({
   useNotifications: () => ({
     popoverOpen: false,

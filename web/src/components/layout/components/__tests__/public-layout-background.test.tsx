@@ -54,6 +54,9 @@ vi.mock('@/components/profile-dropdown', () => ({
   ProfileDropdown: () => null,
 }))
 vi.mock('@/components/theme-switch', () => ({ ThemeSwitch: () => null }))
+vi.mock('@/features/system-update/system-update-action', () => ({
+  SystemUpdateAction: () => null,
+}))
 vi.mock('@/hooks/use-notifications', () => ({
   useNotifications: () => ({
     popoverOpen: false,
@@ -113,7 +116,9 @@ describe('public layout background surfaces', () => {
 
     const root = renderLayout('hero')
 
-    expect(root.style.getPropertyValue('--console-surface-opacity')).toBe('100%')
+    expect(root.style.getPropertyValue('--console-surface-opacity')).toBe(
+      '100%'
+    )
     expect(root.style.getPropertyValue('--console-card-opacity')).toBe('85%')
     expect(root.style.getPropertyValue('--console-sidebar-opacity')).toBe('80%')
     expect(root.style.getPropertyValue('--console-list-opacity')).toBe('75%')

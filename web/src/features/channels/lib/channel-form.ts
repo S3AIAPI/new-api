@@ -20,6 +20,7 @@ import { z } from 'zod'
 
 import {
   CLAUDE_FIELD_PASSTHROUGH_TYPES,
+  CHANNEL_TYPE_AGNES,
   CHANNEL_TYPE_NEW_API,
   CHANNEL_TYPE_TASK_PLUGIN,
   CHANNEL_STATUS,
@@ -861,7 +862,7 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
 
   settingsObj.disable_task_polling_sleep =
     formData.disable_task_polling_sleep === true
-  if (formData.type === 63) {
+  if (formData.type === CHANNEL_TYPE_AGNES) {
     settingsObj.agnes_auto_image_url = formData.agnes_auto_image_url === true
   } else if ('agnes_auto_image_url' in settingsObj) {
     delete settingsObj.agnes_auto_image_url

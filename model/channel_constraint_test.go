@@ -50,14 +50,14 @@ func TestFilterCandidateIDs(t *testing.T) {
 		wantEmpty dto.ChannelFilterKind
 	}{
 		{
-			name:      "identity keeps matching type-59 key",
+			name:      "identity keeps matching task plugin key",
 			ids:       []int{900001, 900002},
 			modelName: "shared",
 			filters:   identityFilters("alpha", nil),
 			wantKept:  []int{900001},
 		},
 		{
-			name:      "identity empty key drops all type-59",
+			name:      "identity empty key drops all task plugin channels",
 			ids:       []int{900001, 900002},
 			modelName: "shared",
 			filters:   identityFilters("", nil),

@@ -16,12 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 
 import { getBannedLoginResponse } from '@/features/auth/components/banned-login-response'
 import { AuthOperationError } from '@/lib/secure-verification'
 import type { AuthBundle } from '@/stores/auth-store'
 
+import type { PasskeyDomains } from '../../passkey/assertion'
 import {
   checkVerificationMethods,
   getLoginVerificationRequirements,
@@ -141,6 +142,9 @@ type PendingVerification = PendingVerificationBase &
 export function useSecureVerification() {
   const [state, dispatch] = useReducer(verificationReducer, { phase: 'idle' })
   const pending = useRef<PendingVerification | null>(null)
+  const [passkeyDomains, setPasskeyDomains] = useState<PasskeyDomains | null>(
+    null
+  )
 
   const cancel = useCallback(() => {
     const current = pending.current
@@ -148,6 +152,7 @@ export function useSecureVerification() {
     current?.controller.abort()
     if (current) current.initialPassword = undefined
     current?.resolve(null)
+    setPasskeyDomains(null)
     dispatch({ type: 'reset' })
   }, [])
 
@@ -243,6 +248,7 @@ export function useSecureVerification() {
           submitting: false,
         }
         pending.current = current
+        setPasskeyDomains(null)
         void loadRequirements(current)
       })
     },
@@ -265,6 +271,7 @@ export function useSecureVerification() {
           submitting: false,
         }
         pending.current = current
+        setPasskeyDomains(null)
         void loadRequirements(current)
       })
     },
@@ -289,7 +296,10 @@ export function useSecureVerification() {
         const bundle = await verifyLogin(
           input,
           current.request.challenge,
-          current.controller.signal
+          current.controller.signal,
+          (domains) => {
+            if (pending.current === current) setPasskeyDomains(domains)
+          }
         )
         if (pending.current !== current) return
         current.resolve(bundle)
@@ -298,7 +308,10 @@ export function useSecureVerification() {
           input,
           current.request,
           state.requirements.password_encryption_enabled,
-          current.controller.signal
+          current.controller.signal,
+          (domains) => {
+            if (pending.current === current) setPasskeyDomains(domains)
+          }
         )
         if (pending.current !== current) return
         current.resolve(proof)
@@ -341,6 +354,7 @@ export function useSecureVerification() {
     isActive: state.phase !== 'idle',
     dialogProps: {
       state,
+      passkeyDomains,
       onCancel: cancel,
       onRetry: retry,
       onInputChange: setInput,

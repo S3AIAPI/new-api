@@ -125,6 +125,7 @@ var (
 
 // compileEnvPrototypeV1 is the v1 type-checking prototype used at compile time.
 var compileEnvPrototypeV1 = map[string]any{
+	"image_count":      float64(1),
 	"p":                float64(0),
 	"c":                float64(0),
 	"len":              float64(0),
@@ -132,6 +133,7 @@ var compileEnvPrototypeV1 = map[string]any{
 	"cc":               float64(0),
 	"cc1h":             float64(0),
 	"img":              float64(0),
+	"img_cr":           float64(0),
 	"img_o":            float64(0),
 	"ai":               float64(0),
 	"ao":               float64(0),
@@ -292,10 +294,14 @@ func extractUsedUsageKeys(prog *vm.Program) map[string]bool {
 // UsedVars returns the set of identifier names referenced by an expression.
 // The result is cached alongside the compiled program. Returns nil for empty input.
 func UsedVars(exprStr string) map[string]bool {
+	return UsedVarsByHash(exprStr, ExprHashString(exprStr))
+}
+
+// UsedVarsByHash reuses the digest captured by the host's billing snapshot.
+func UsedVarsByHash(exprStr, hash string) map[string]bool {
 	if exprStr == "" {
 		return nil
 	}
-	hash := ExprHashString(exprStr)
 	cacheMu.RLock()
 	if entry, ok := cache[hash]; ok {
 		cacheMu.RUnlock()

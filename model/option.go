@@ -259,9 +259,12 @@ func InitOptionMap() {
 }
 
 func loadOptionsFromDatabase() {
+	passkeyOptionMutex.Lock()
+	defer passkeyOptionMutex.Unlock()
 	options, _ := AllOption()
 	hasPopupMode := false
 	legacyDashboardPopupEnabled := false
+	passkeyOptions := make(map[string]string)
 	for _, option := range options {
 		if option.Key == "NoticePopupMode" {
 			hasPopupMode = true
@@ -269,11 +272,16 @@ func loadOptionsFromDatabase() {
 		if option.Key == "NoticePopupOnDashboardEnabled" && option.Value == "true" {
 			legacyDashboardPopupEnabled = true
 		}
+		if IsPasskeyDomainOption(option.Key) {
+			passkeyOptions[option.Key] = option.Value
+			continue
+		}
 		err := updateOptionMap(option.Key, option.Value)
 		if err != nil {
 			common.SysLog("failed to update option map: " + err.Error())
 		}
 	}
+	applyPasskeyDomainOptions(passkeyOptions)
 	if !hasPopupMode && legacyDashboardPopupEnabled {
 		_ = updateOptionMap("NoticePopupMode", "both")
 	}
@@ -342,6 +350,13 @@ func normalizeOptionValue(key, value string) (string, error) {
 }
 
 func UpdateOption(key string, value string) error {
+	if IsPasskeyDomainOption(key) {
+		_, err := UpdatePasskeyDomainOptions(map[string]string{key: value}, false, "")
+		return err
+	}
+	if IsModelPricingOption(key) {
+		return UpdateModelPricingOptions(map[string]string{key: value})
+	}
 	normalizedValue, err := normalizeOptionValue(key, value)
 	if err != nil {
 		return err
@@ -373,6 +388,12 @@ func UpdateOption(key string, value string) error {
 func UpdateOptionsBulk(values map[string]string) error {
 	if len(values) == 0 {
 		return nil
+	}
+	for key := range values {
+		if IsPasskeyDomainOption(key) {
+			_, err := UpdatePasskeyDomainOptions(values, false, "")
+			return err
+		}
 	}
 	for key, value := range values {
 		normalizedValue, err := normalizeOptionValue(key, value)
