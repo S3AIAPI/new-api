@@ -220,7 +220,7 @@ func effectiveModelPricing(values map[string]map[string]any, name string) Pricin
 }
 
 // PreviewModelPricing resolves a complete editable draft using the same defaults
-// as the saved-price display and conversion. It has no write side effects.
+// as the saved-price display. It has no write side effects.
 func PreviewModelPricing(name string, draft PricingValues) (PricingValues, error) {
 	if draft == nil {
 		return nil, errors.New("pricing draft is required")

@@ -1,8 +1,8 @@
 package model
 
-// Deprecated model compatibility: OpenAI removed DALL·E 2 and DALL·E 3 on
-// 2026-05-12. Keep conversion of existing prices available for compatible
-// upstreams, deriving every multiplier from the legacy DTO billing logic.
+// OpenAI removed DALL-E 2 and DALL-E 3 on 2026-05-12. Compatible upstreams can
+// still serve them, so expose their request-price multipliers using the same
+// legacy DTO billing logic as relay.
 // https://developers.openai.com/api/docs/deprecations#2025-11-14-dalle-model-snapshots
 
 import (

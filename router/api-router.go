@@ -246,7 +246,6 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.PATCH("/model_pricing", controller.UpdateModelPricingConfig)
 			optionRoute.POST("/smtp/test", controller.SendSMTPTestEmail)
 			optionRoute.DELETE("/support", controller.ClearSupportData)
-			optionRoute.POST("/model_pricing/convert", controller.PreviewModelPricingConversion)
 			optionRoute.POST("/model_pricing/preview", controller.PreviewModelPricing)
 			optionRoute.POST("/payment_compliance", controller.ConfirmPaymentCompliance)
 			optionRoute.GET("/channel_affinity_cache", controller.GetChannelAffinityCacheStats)

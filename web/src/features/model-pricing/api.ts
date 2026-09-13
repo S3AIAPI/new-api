@@ -81,25 +81,6 @@ export type ModelPricingChange = {
   reset?: boolean
 }
 
-export type ModelPricingConversion = Partial<ModelPricingDescription> & {
-  expression?: string
-  unsupported_reason?: string
-}
-
-export async function previewModelPricingConversion(request: {
-  model_name: string
-  pricing: PricingValues
-}): Promise<ModelPricingConversion> {
-  const response = await api.post('/api/option/model_pricing/convert', request)
-  if (!response.data.success) {
-    throw createServerError(
-      response.data,
-      t('Failed to prepare pricing conversion')
-    )
-  }
-  return response.data.data
-}
-
 export async function previewModelPricing(request: {
   model_name: string
   pricing: PricingValues
