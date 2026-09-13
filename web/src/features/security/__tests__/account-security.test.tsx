@@ -28,6 +28,7 @@ import {
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+import type { UserProfile } from '@/features/profile/types'
 import { api } from '@/lib/api'
 import { STATUS_QUERY_KEY } from '@/lib/status-query'
 import { useAuthStore } from '@/stores/auth-store'
@@ -37,6 +38,7 @@ import { DeleteAccountDialog } from '../components/dialogs/delete-account-dialog
 import { EmailBindDialog } from '../components/dialogs/email-bind-dialog'
 import { TwoFABackupDialog } from '../components/dialogs/two-fa-backup-dialog'
 import { TwoFADisableDialog } from '../components/dialogs/two-fa-disable-dialog'
+import { LoginTwoFactorToggle } from '../components/login-two-factor-toggle'
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }))
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -59,6 +61,92 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   useAuthStore.getState().auth.reset('idle')
+})
+
+it('verifies the current authenticator before disabling login 2FA', async () => {
+  const profile: UserProfile = {
+    id: 1,
+    username: 'user',
+    display_name: 'User',
+    role: 1,
+    group: 'default',
+    quota: 0,
+    used_quota: 0,
+    request_count: 0,
+    status: 1,
+    aff_count: 0,
+    aff_quota: 0,
+    aff_history_quota: 0,
+    created_time: 0,
+  }
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        scope: '2fa.login.disable',
+        methods: [{ method: '2fa', available: true }],
+        oauth_providers: [],
+        password_encryption_enabled: false,
+      },
+    },
+  })
+  const post = vi.spyOn(api, 'post').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        proof_token: 'login-2fa-proof',
+        scope: '2fa.login.disable',
+        method: '2fa',
+        expires_at: Math.floor(Date.now() / 1000) + 60,
+      },
+    },
+  })
+  const put = vi.spyOn(api, 'put').mockResolvedValue({
+    data: { success: true, data: { enabled: false } },
+  })
+  const onUpdate = vi.fn()
+  const user = userEvent.setup()
+  render(
+    <QueryClientProvider client={client}>
+      <LoginTwoFactorToggle
+        profile={profile}
+        twoFAEnabled
+        onUpdate={onUpdate}
+      />
+    </QueryClientProvider>
+  )
+
+  const toggle = screen.getByRole('switch', {
+    name: 'Login Two-Factor Verification',
+  })
+  expect(toggle).toBeChecked()
+  await user.click(toggle)
+  expect(put).not.toHaveBeenCalled()
+  await user.type(
+    await screen.findByRole('textbox', {
+      name: 'Authenticator code or backup code',
+    }),
+    '123456'
+  )
+  await user.click(screen.getByRole('button', { name: 'Verify' }))
+
+  await waitFor(() => expect(toggle).not.toBeChecked())
+  expect(post).toHaveBeenCalledWith(
+    '/api/verify',
+    { method: '2fa', scope: '2fa.login.disable', code: '123456' },
+    expect.objectContaining({ signal: expect.any(AbortSignal) })
+  )
+  expect(put).toHaveBeenCalledExactlyOnceWith(
+    '/api/user/2fa/login-verification',
+    { enabled: false },
+    expect.objectContaining({
+      headers: { 'X-Security-Proof': 'login-2fa-proof' },
+      acceptAuthRotation: true,
+      singleUseAuthorization: true,
+      signal: expect.any(AbortSignal),
+    })
+  )
+  expect(onUpdate).toHaveBeenCalledOnce()
 })
 
 it('requires verification after username confirmation and cancels without deleting the account', async () => {

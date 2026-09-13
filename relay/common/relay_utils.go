@@ -171,6 +171,12 @@ func validateMultipartTaskRequest(c *gin.Context, info *RelayInfo, action string
 		Size:     formData.Get("size"),
 		Metadata: make(map[string]any),
 	}
+	if firstFrame := strings.TrimSpace(formData.Get("first_frame")); firstFrame != "" {
+		req.FirstFrame = &firstFrame
+	}
+	if lastFrame := strings.TrimSpace(formData.Get("last_frame")); lastFrame != "" {
+		req.LastFrame = &lastFrame
+	}
 
 	if durationStr := formData.Get("seconds"); durationStr != "" {
 		if duration, err := strconv.Atoi(durationStr); err == nil {
@@ -273,6 +279,8 @@ func isKnownTaskField(field string) bool {
 		"mode":            true,
 		"image":           true,
 		"images":          true,
+		"first_frame":     true,
+		"last_frame":      true,
 		"size":            true,
 		"duration":        true,
 		"input_reference": true, // Sora 特有字段

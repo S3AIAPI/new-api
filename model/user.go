@@ -210,15 +210,66 @@ func UpdateUserSetting(userId int, setting dto.UserSetting) error {
 	if userId == 0 {
 		return errors.New("id 为空！")
 	}
-	settingBytes, err := common.Marshal(setting)
-	if err != nil {
-		return err
-	}
-	settingValue := string(settingBytes)
-	if err = DB.Model(&User{}).Where("id = ?", userId).Update("setting", settingValue).Error; err != nil {
+	var settingValue string
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := lockForUpdate(tx).Select("id", "setting").First(&user, userId).Error; err != nil {
+			return err
+		}
+		// Login 2FA policy is writable only through the session-bound security
+		// mutation below; preserve it across every ordinary settings update.
+		setting.LoginTwoFactorEnabled = user.GetSetting().LoginTwoFactorEnabled
+		settingBytes, err := common.Marshal(setting)
+		if err != nil {
+			return err
+		}
+		settingValue = string(settingBytes)
+		return tx.Model(&User{}).Where("id = ?", userId).Update("setting", settingValue).Error
+	}); err != nil {
 		return err
 	}
 	return updateUserSettingCache(userId, settingValue)
+}
+
+// UpdateLoginTwoFactorSettingForSession changes the login policy while
+// rechecking the authenticated session under the user lock. Disabling the
+// policy also advances AuthVersion so every other session is invalidated.
+func UpdateLoginTwoFactorSettingForSession(identity AuthSessionIdentity, enabled bool) error {
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := ValidateAuthSessionWithTx(tx, identity); err != nil {
+			return err
+		}
+		var user User
+		if err := lockForUpdate(tx).Select("id", "setting").First(&user, identity.UserID).Error; err != nil {
+			return err
+		}
+		if !enabled {
+			var twoFA TwoFA
+			if err := lockForUpdate(tx).Where("user_id = ? AND is_enabled = ?", identity.UserID, true).First(&twoFA).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return ErrTwoFANotEnabled
+				}
+				return err
+			}
+			if _, err := IncrementUserAuthVersionWithTx(tx, identity.UserID); err != nil {
+				return err
+			}
+		}
+		setting := user.GetSetting()
+		if enabled {
+			setting.LoginTwoFactorEnabled = nil
+		} else {
+			setting.LoginTwoFactorEnabled = new(bool)
+		}
+		settingBytes, err := common.Marshal(setting)
+		if err != nil {
+			return err
+		}
+		return tx.Model(&User{}).Where("id = ?", identity.UserID).Update("setting", string(settingBytes)).Error
+	}); err != nil {
+		return err
+	}
+	return PublishUserAuthCache(identity.UserID)
 }
 
 // userBindColumns 允许通过 UpdateUserBindColumn 更新的第三方账号绑定列白名单。

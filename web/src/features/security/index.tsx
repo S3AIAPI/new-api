@@ -123,7 +123,11 @@ export function Security() {
               {t('Security verification')}
             </h3>
             <PasskeyCard loading={loading} />
-            <TwoFACard loading={loading} />
+            <TwoFACard
+              loading={loading}
+              profile={profile}
+              onUpdate={refreshProfile}
+            />
           </div>
           <section aria-labelledby='security-privacy' className='space-y-4'>
             <h3 id='security-privacy' className='text-sm font-semibold'>

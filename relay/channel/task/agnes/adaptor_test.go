@@ -151,7 +151,7 @@ func TestBuildRequestBodyDefaultsAgnes25Seconds(t *testing.T) {
 	require.NoError(t, err)
 	body, err := io.ReadAll(bodyReader)
 	require.NoError(t, err)
-	var payload map[string]interface{}
+	var payload map[string]any
 	require.NoError(t, common.Unmarshal(body, &payload))
 	assert.Equal(t, "5", payload["seconds"])
 	assert.NotContains(t, payload, "duration")
@@ -174,11 +174,41 @@ func TestBuildRequestBodyUsesAgnes25ReferenceFields(t *testing.T) {
 	require.NoError(t, err)
 	body, err := io.ReadAll(bodyReader)
 	require.NoError(t, err)
-	var payload map[string]interface{}
+	var payload map[string]any
 	require.NoError(t, common.Unmarshal(body, &payload))
 	assert.NotContains(t, payload, "image")
-	assert.Equal(t, []interface{}{"https://example.test/reference.png"}, payload["images"])
+	assert.Equal(t, []any{"https://example.test/reference.png"}, payload["images"])
 	assert.Equal(t, "reference", payload["mode"])
+}
+
+func TestAgnes25KeyframeAcceptsOfficialFrameFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", bytes.NewBufferString(`{
+		"model":"agnes-video-2.5-flash",
+		"prompt":"transition between frames",
+		"mode":"keyframe",
+		"first_frame":"https://example.test/first.png",
+		"last_frame":"https://example.test/last.png"
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	info := &relaycommon.RelayInfo{
+		ChannelMeta:   &relaycommon.ChannelMeta{UpstreamModelName: "agnes-video-2.5-flash"},
+		TaskRelayInfo: &relaycommon.TaskRelayInfo{},
+	}
+	adaptor := &TaskAdaptor{}
+
+	require.Nil(t, adaptor.ValidateRequestAndSetAction(c, info))
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	require.NoError(t, err)
+	body, err := io.ReadAll(bodyReader)
+	require.NoError(t, err)
+	var payload map[string]any
+	require.NoError(t, common.Unmarshal(body, &payload))
+	assert.Equal(t, "keyframe", payload["mode"])
+	assert.Equal(t, "https://example.test/first.png", payload["first_frame"])
+	assert.Equal(t, "https://example.test/last.png", payload["last_frame"])
+	assert.NotContains(t, payload, "images")
 }
 
 func TestTaskAdaptorRejectsNilRelayInfo(t *testing.T) {

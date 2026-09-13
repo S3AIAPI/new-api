@@ -16,7 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { TwoFAStatus } from '@/features/profile/types'
+import type {
+  AccountSecurityResult,
+  TwoFAStatus,
+} from '@/features/profile/types'
 import { api } from '@/lib/api'
 import {
   AuthOperationError,
@@ -110,6 +113,26 @@ export function enable2FA(
         signal,
         acceptAuthRotation: true,
         singleUseAuthorization: true,
+      }
+    )
+  )
+}
+
+export function updateLoginTwoFactor(
+  enabled: boolean,
+  proofToken: string | undefined,
+  signal: AbortSignal
+): Promise<AccountSecurityResult & { enabled: boolean }> {
+  return authResult(
+    api.put(
+      '/api/user/2fa/login-verification',
+      { enabled },
+      {
+        ...authRequestOptions,
+        ...(proofToken ? { headers: { 'X-Security-Proof': proofToken } } : {}),
+        acceptAuthRotation: !enabled,
+        singleUseAuthorization: !enabled,
+        signal,
       }
     )
   )

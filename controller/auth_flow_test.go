@@ -158,6 +158,106 @@ func TestSecurityLoginRejectsChangedOrExpiredAuthorization(t *testing.T) {
 	}
 }
 
+func TestLoginTwoFactorSettingRequiresCurrentFactorAndRotatesSessions(t *testing.T) {
+	user, identity := setupSecurityEnrollmentTest(t)
+	const secret = "JBSWY3DPEHPK3PXP"
+	require.NoError(t, model.DB.Create(&model.TwoFA{
+		UserId: user.Id, Secret: secret, IsEnabled: true,
+	}).Error)
+	otherBundle, err := service.CreateLoginSession(user.Id, "password", "127.0.0.2", "other-session")
+	require.NoError(t, err)
+
+	challenge, err := service.StartLoginVerification(user, "password")
+	require.NoError(t, err)
+	require.NotNil(t, challenge, "a missing setting must keep login 2FA enabled")
+	require.Len(t, challenge.Methods, 1)
+	assert.Equal(t, service.VerificationMethodTwoFA, challenge.Methods[0].Method)
+
+	requirements, err := service.GetVerificationRequirements(identity, service.VerificationScopeLoginTwoFADisable)
+	require.NoError(t, err)
+	require.Len(t, requirements.Methods, 1)
+	assert.Equal(t, service.VerificationMethodTwoFA, requirements.Methods[0].Method)
+	_, err = service.RequireVerificationMethod(identity, service.VerificationScopeLoginTwoFADisable, service.VerificationMethodPassword)
+	assert.ErrorIs(t, err, service.ErrProofMethod)
+
+	body := `{"enabled":false}`
+	response := securityEnrollmentRequest("PUT", "/api/user/2fa/login-verification", body, "", identity, UpdateLoginTwoFA)
+	assert.Contains(t, response.Body.String(), `"code":"SECURITY_PROOF_REQUIRED"`)
+
+	wrongScope := issueSecurityEnrollmentProof(t, identity, service.VerificationOperation{Scope: service.VerificationScopePasswordChange}, service.VerificationMethodPassword)
+	response = securityEnrollmentRequest("PUT", "/api/user/2fa/login-verification", body, wrongScope, identity, UpdateLoginTwoFA)
+	assert.Contains(t, response.Body.String(), `"code":"SECURITY_PROOF_SCOPE_MISMATCH"`)
+
+	consumed := issueSecurityEnrollmentProof(t, identity, service.VerificationOperation{Scope: service.VerificationScopeLoginTwoFADisable}, service.VerificationMethodTwoFA)
+	operation := service.VerificationOperation{Scope: service.VerificationScopeLoginTwoFADisable}
+	_, err = service.ConsumeOperationProof(consumed, identity, operation)
+	require.NoError(t, err)
+	_, err = service.ConsumeOperationProof(consumed, identity, operation)
+	assert.ErrorIs(t, err, service.ErrProofConsumed)
+
+	code, err := totp.GenerateCode(secret, time.Now())
+	require.NoError(t, err)
+	proof, err := service.VerifySecurityInput(identity, service.VerificationInput{
+		Scope: service.VerificationScopeLoginTwoFADisable, Method: service.VerificationMethodTwoFA, Code: code,
+	})
+	require.NoError(t, err)
+	response = securityEnrollmentRequest("PUT", "/api/user/2fa/login-verification", body, proof.ProofToken, identity, UpdateLoginTwoFA)
+	var result securityEnrollmentResponse
+	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+	require.True(t, result.Success, result.Message)
+	var rotation struct {
+		Enabled     bool                     `json:"enabled"`
+		AccessToken string                   `json:"access_token"`
+		Session     service.LoginSessionView `json:"session"`
+	}
+	require.NoError(t, common.Unmarshal(result.Data, &rotation))
+	assert.False(t, rotation.Enabled)
+	assert.Equal(t, identity.SessionID, rotation.Session.SID)
+	rotatedIdentity, err := service.ParseAccessToken(rotation.AccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, identity.UserAuthVersion+1, rotatedIdentity.UserAuthVersion)
+
+	otherSession, err := model.GetUserSessionBySID(otherBundle.Session.SID)
+	require.NoError(t, err)
+	assert.Equal(t, model.UserSessionStatusRevoked, otherSession.Status)
+	activeCount, err := model.CountActiveUserSessions(user.Id, time.Now().Unix())
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, activeCount)
+
+	stored, err := model.GetUserById(user.Id, false)
+	require.NoError(t, err)
+	assert.False(t, stored.GetSetting().IsLoginTwoFactorEnabled())
+	challenge, err = service.StartLoginVerification(stored, "password")
+	require.NoError(t, err)
+	assert.Nil(t, challenge, "disabling login 2FA must skip only the TOTP login step")
+
+	settingsBody := `{"notify_type":"email","quota_warning_threshold":1000,"record_ip_log":true}`
+	response = securityEnrollmentRequest("PUT", "/api/user/setting", settingsBody, "", rotatedIdentity, UpdateUserSetting)
+	require.Equal(t, http.StatusOK, response.Code)
+	stored, err = model.GetUserById(user.Id, false)
+	require.NoError(t, err)
+	assert.False(t, stored.GetSetting().IsLoginTwoFactorEnabled(), "ordinary settings updates must preserve the protected login policy")
+	forcedEnabled := true
+	settings := stored.GetSetting()
+	settings.LoginTwoFactorEnabled = &forcedEnabled
+	require.NoError(t, model.UpdateUserSetting(user.Id, settings))
+	stored, err = model.GetUserById(user.Id, false)
+	require.NoError(t, err)
+	assert.False(t, stored.GetSetting().IsLoginTwoFactorEnabled(), "generic model updates cannot bypass the security endpoint")
+
+	response = securityEnrollmentRequest("PUT", "/api/user/2fa/login-verification", `{"enabled":true}`, "", rotatedIdentity, UpdateLoginTwoFA)
+	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+	require.True(t, result.Success, result.Message)
+	stored, err = model.GetUserById(user.Id, false)
+	require.NoError(t, err)
+	assert.True(t, stored.GetSetting().IsLoginTwoFactorEnabled())
+	challenge, err = service.StartLoginVerification(stored, "password")
+	require.NoError(t, err)
+	require.NotNil(t, challenge)
+	require.Len(t, challenge.Methods, 1)
+	assert.Equal(t, service.VerificationMethodTwoFA, challenge.Methods[0].Method)
+}
+
 func TestSecurityLoginPasskeyDoesNotRequireAdditionalTwoFA(t *testing.T) {
 	for _, direct := range []bool{false, true} {
 		t.Run(fmt.Sprintf("direct=%t", direct), func(t *testing.T) {

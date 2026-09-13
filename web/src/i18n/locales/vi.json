@@ -7129,6 +7129,15 @@
     "Your Redemption Codes": "Mã đổi thưởng của bạn",
     "Connect to Meshy2API 3D generation services": "Kết nối với dịch vụ tạo 3D của Meshy2API",
     "Connect to UnrealSpeech text-to-speech services": "Kết nối với dịch vụ chuyển văn bản thành giọng nói của UnrealSpeech",
-    "Connect to Agnes multimodal model services": "Kết nối với dịch vụ mô hình đa phương thức của Agnes"
+    "Connect to Agnes multimodal model services": "Kết nối với dịch vụ mô hình đa phương thức của Agnes",
+    "Disable login two-factor verification": "Tắt xác minh hai yếu tố khi đăng nhập",
+    "Disabled two-factor verification at login": "Đã tắt xác minh hai yếu tố khi đăng nhập",
+    "Enabled two-factor verification at login": "Đã bật xác minh hai yếu tố khi đăng nhập",
+    "Login Two-Factor Verification": "Xác minh hai yếu tố khi đăng nhập",
+    "No recent status data for {{name}}": "Không có dữ liệu trạng thái gần đây cho {{name}}",
+    "Recent status for {{name}}": "Trạng thái gần đây của {{name}}",
+    "Set up two-factor authentication before changing this setting.": "Hãy thiết lập xác thực hai yếu tố trước khi thay đổi cài đặt này.",
+    "Enter a current two-factor code to confirm this change.": "Nhập mã xác thực hai yếu tố hiện tại để xác nhận thay đổi này.",
+    "Require a two-factor code when signing in": "Yêu cầu mã xác thực hai yếu tố khi đăng nhập"
   }
 }

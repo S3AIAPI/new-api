@@ -7129,6 +7129,15 @@
     "Your Redemption Codes": "我的兌換碼",
     "Connect to Meshy2API 3D generation services": "連接 Meshy2API 3D 生成服務",
     "Connect to UnrealSpeech text-to-speech services": "連接 UnrealSpeech 文字轉語音服務",
-    "Connect to Agnes multimodal model services": "連接 Agnes 多模態模型服務"
+    "Connect to Agnes multimodal model services": "連接 Agnes 多模態模型服務",
+    "Disable login two-factor verification": "停用登入兩步驟驗證",
+    "Disabled two-factor verification at login": "已停用登入時的兩步驟驗證",
+    "Enabled two-factor verification at login": "已啟用登入時的兩步驟驗證",
+    "Login Two-Factor Verification": "登入兩步驟驗證",
+    "No recent status data for {{name}}": "{{name}} 暫無近期狀態資料",
+    "Recent status for {{name}}": "{{name}} 的近期狀態",
+    "Set up two-factor authentication before changing this setting.": "請先設定兩步驟驗證，再變更此設定。",
+    "Enter a current two-factor code to confirm this change.": "請輸入目前的兩步驟驗證碼以確認此變更。",
+    "Require a two-factor code when signing in": "登入時要求輸入兩步驟驗證碼"
   }
 }

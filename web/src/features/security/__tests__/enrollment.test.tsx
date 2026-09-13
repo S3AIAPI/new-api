@@ -56,6 +56,21 @@ const credential = {
   },
   getClientExtensionResults: () => ({}),
 }
+const twoFAProfile: UserProfile = {
+  id: 1,
+  username: 'user',
+  display_name: 'User',
+  role: 1,
+  group: 'default',
+  quota: 0,
+  used_quota: 0,
+  request_count: 0,
+  status: 1,
+  aff_count: 0,
+  aff_quota: 0,
+  aff_history_quota: 0,
+  created_time: 0,
+}
 
 let client: QueryClient
 beforeEach(() => {
@@ -112,7 +127,7 @@ it.each(['2fa', 'passkey'] as const)(
     const user = userEvent.setup()
     render(
       factor === '2fa' ? (
-        <TwoFACard loading={false} />
+        <TwoFACard loading={false} profile={twoFAProfile} onUpdate={vi.fn()} />
       ) : (
         <PasskeyCard loading={false} />
       )
@@ -260,7 +275,9 @@ it('shows a retry when the 2FA status query fails instead of offering enrollment
     .spyOn(api, 'get')
     .mockRejectedValue(new Error('Status unavailable'))
   const user = userEvent.setup()
-  render(<TwoFACard loading={false} />)
+  render(
+    <TwoFACard loading={false} profile={twoFAProfile} onUpdate={vi.fn()} />
+  )
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Status unavailable'
   )
@@ -355,7 +372,7 @@ it('consumes Passkey authorization at setup and activates using only the dedicat
   client.setQueryData(STATUS_QUERY_KEY, { passkey_rp_ids: ['localhost'] })
   render(
     <QueryClientProvider client={client}>
-      <TwoFACard loading={false} />
+      <TwoFACard loading={false} profile={twoFAProfile} onUpdate={vi.fn()} />
     </QueryClientProvider>
   )
   await user.click(await screen.findByRole('button', { name: 'Enable' }))
@@ -558,7 +575,9 @@ it.each(['proof', 'setup'] as const)(
     const user = userEvent.setup()
     const info = vi.spyOn(toast, 'info')
     const success = vi.spyOn(toast, 'success')
-    render(<TwoFACard loading={false} />)
+    render(
+      <TwoFACard loading={false} profile={twoFAProfile} onUpdate={vi.fn()} />
+    )
     await user.click(await screen.findByRole('button', { name: 'Enable' }))
     await user.type(
       await screen.findByLabelText('Password', { selector: 'input' }),
@@ -682,7 +701,9 @@ it.each(['wrong code', 'response lost'] as const)(
       throw new Error(`Unexpected POST ${url}`)
     })
     const user = userEvent.setup()
-    render(<TwoFACard loading={false} />)
+    render(
+      <TwoFACard loading={false} profile={twoFAProfile} onUpdate={vi.fn()} />
+    )
     await user.click(await screen.findByRole('button', { name: 'Enable' }))
     await user.type(
       await screen.findByLabelText('Password', { selector: 'input' }),

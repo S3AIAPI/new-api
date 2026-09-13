@@ -36,6 +36,8 @@ var auditContentTemplates = map[string]string{
 	"user.2fa_enable":           "Enabled two-factor authentication",
 	"user.2fa_disable_self":     "Disabled two-factor authentication",
 	"user.2fa_backup_codes":     "Regenerated two-factor backup codes",
+	"user.login_2fa_enable":     "Enabled two-factor verification at login",
+	"user.login_2fa_disable":    "Disabled two-factor verification at login",
 	"user.security_verify":      "Completed security verification",
 	"user.password_change":      "Account password change",
 	"user.binding_start":        "Account binding request",

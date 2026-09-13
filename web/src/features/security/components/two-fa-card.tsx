@@ -31,6 +31,7 @@ import {
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SecureVerificationDialog } from '@/features/auth/secure-verification'
+import type { UserProfile } from '@/features/profile/types'
 import { useDialogs } from '@/hooks/use-dialog'
 
 import { useTwoFA } from '../hooks/use-two-fa'
@@ -38,6 +39,7 @@ import { useTwoFASetup } from '../hooks/use-two-fa-setup'
 import { TwoFABackupDialog } from './dialogs/two-fa-backup-dialog'
 import { TwoFADisableDialog } from './dialogs/two-fa-disable-dialog'
 import { TwoFASetupDialog } from './dialogs/two-fa-setup-dialog'
+import { LoginTwoFactorToggle } from './login-two-factor-toggle'
 
 // ============================================================================
 // Two-Factor Authentication Card Component
@@ -45,11 +47,17 @@ import { TwoFASetupDialog } from './dialogs/two-fa-setup-dialog'
 
 interface TwoFACardProps {
   loading: boolean
+  profile: UserProfile
+  onUpdate: () => void
 }
 
 type DialogKey = 'disable' | 'backup'
 
-export function TwoFACard({ loading: pageLoading }: TwoFACardProps) {
+export function TwoFACard({
+  loading: pageLoading,
+  profile,
+  onUpdate,
+}: TwoFACardProps) {
   const { t } = useTranslation()
   const { status, loading, error, refetch } = useTwoFA(!pageLoading)
   const dialogs = useDialogs<DialogKey>()
@@ -172,6 +180,12 @@ export function TwoFACard({ loading: pageLoading }: TwoFACardProps) {
                 </Button>
               </div>
             )}
+
+            <LoginTwoFactorToggle
+              profile={profile}
+              twoFAEnabled={status.enabled}
+              onUpdate={onUpdate}
+            />
           </div>
         </CardContent>
       </Card>

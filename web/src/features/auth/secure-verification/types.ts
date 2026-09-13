@@ -31,6 +31,7 @@ export type SecurityProofScope =
   | '2fa.setup'
   | '2fa.disable'
   | '2fa.backup_codes.regenerate'
+  | '2fa.login.disable'
   | 'access_token.generate'
   | 'access_token.revoke'
   | 'account.binding.bind'

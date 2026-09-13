@@ -85,15 +85,30 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 		if req.Size != "" && req.Size != "720P" {
 			return service.TaskErrorWrapperLocal(fmt.Errorf("Agnes 2.5 size must be 720P"), "invalid_size", http.StatusBadRequest)
 		}
+		firstFrame := req.FirstFrame != nil && strings.TrimSpace(*req.FirstFrame) != ""
+		lastFrame := req.LastFrame != nil && strings.TrimSpace(*req.LastFrame) != ""
 		imageCount := len(req.Images)
-		if imageCount == 0 && req.Image != "" {
-			imageCount = 1
+		hasFrames := firstFrame || lastFrame
+		if mode == "keyframe" && hasFrames && imageCount > 0 {
+			return service.TaskErrorWrapperLocal(fmt.Errorf("keyframe mode cannot mix images with first_frame or last_frame"), "invalid_images", http.StatusBadRequest)
+		}
+		if mode == "keyframe" && hasFrames {
+			imageCount = 0
+			if firstFrame {
+				imageCount++
+			}
+			if lastFrame {
+				imageCount++
+			}
 		}
 		if (mode == "reference" || mode == "keyframe") && imageCount == 0 {
 			return service.TaskErrorWrapperLocal(fmt.Errorf("%s mode requires images", mode), "invalid_images", http.StatusBadRequest)
 		}
-		if mode == "text" && imageCount > 0 {
+		if mode == "text" && (imageCount > 0 || hasFrames) {
 			return service.TaskErrorWrapperLocal(fmt.Errorf("text mode does not accept images"), "invalid_images", http.StatusBadRequest)
+		}
+		if mode == "reference" && hasFrames {
+			return service.TaskErrorWrapperLocal(fmt.Errorf("reference mode does not accept first_frame or last_frame"), "invalid_images", http.StatusBadRequest)
 		}
 		if mode == "keyframe" && imageCount > 2 {
 			return service.TaskErrorWrapperLocal(fmt.Errorf("keyframe mode supports at most 2 images"), "invalid_images", http.StatusBadRequest)
@@ -173,7 +188,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if err != nil {
 		return nil, err
 	}
-	var body map[string]interface{}
+	var body map[string]any
 	if err := common.Unmarshal(raw, &body); err != nil {
 		return nil, err
 	}
@@ -208,11 +223,14 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		}
 		body["mode"] = mode
 		if mode == "keyframe" {
-			delete(body, "images")
-			if len(req.Images) > 0 {
+			if req.FirstFrame != nil && strings.TrimSpace(*req.FirstFrame) != "" {
+				body["first_frame"] = strings.TrimSpace(*req.FirstFrame)
+			} else if len(req.Images) > 0 {
 				body["first_frame"] = req.Images[0]
 			}
-			if len(req.Images) > 1 {
+			if req.LastFrame != nil && strings.TrimSpace(*req.LastFrame) != "" {
+				body["last_frame"] = strings.TrimSpace(*req.LastFrame)
+			} else if len(req.Images) > 1 {
 				body["last_frame"] = req.Images[1]
 			}
 		} else if len(req.Images) > 0 {
@@ -222,7 +240,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		delete(body, "images")
 		body["image"] = req.Images[0]
 		if len(req.Images) > 1 {
-			body["extra_body"] = map[string]interface{}{"image": req.Images}
+			body["extra_body"] = map[string]any{"image": req.Images}
 		}
 	}
 	if info.ChannelMeta != nil && info.ChannelOtherSettings.AgnesAutoImageURL {
@@ -237,9 +255,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	return bytes.NewReader(data), nil
 }
 
-func rewriteImagesForAgnes(c *gin.Context, value interface{}) error {
+func rewriteImagesForAgnes(c *gin.Context, value any) error {
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		for key, child := range v {
 			if err := rewriteImagesForAgnes(c, child); err != nil {
 				return err
@@ -252,7 +270,7 @@ func rewriteImagesForAgnes(c *gin.Context, value interface{}) error {
 				v[key] = converted
 			}
 		}
-	case []interface{}:
+	case []any:
 		for i, child := range v {
 			if err := rewriteImagesForAgnes(c, child); err != nil {
 				return err
@@ -373,16 +391,16 @@ func extractAgnesVideoID(value any) string {
 }
 
 type statusResponse struct {
-	ID          string                 `json:"id"`
-	TaskID      string                 `json:"task_id"`
-	VideoID     string                 `json:"video_id"`
-	Model       string                 `json:"model"`
-	Status      string                 `json:"status"`
-	Progress    int                    `json:"progress"`
-	URL         string                 `json:"url"`
-	CompletedAt int64                  `json:"completed_at"`
-	Metadata    map[string]interface{} `json:"metadata"`
-	Data        map[string]interface{} `json:"data"`
+	ID          string         `json:"id"`
+	TaskID      string         `json:"task_id"`
+	VideoID     string         `json:"video_id"`
+	Model       string         `json:"model"`
+	Status      string         `json:"status"`
+	Progress    int            `json:"progress"`
+	URL         string         `json:"url"`
+	CompletedAt int64          `json:"completed_at"`
+	Metadata    map[string]any `json:"metadata"`
+	Data        map[string]any `json:"data"`
 }
 
 func (a *TaskAdaptor) ParseTaskResult(_ *model.Task, _ *http.Response, body []byte) (*relaycommon.TaskInfo, error) {
@@ -435,7 +453,7 @@ func extractAgnesURL(result statusResponse) string {
 	if result.URL != "" {
 		return result.URL
 	}
-	for _, source := range []map[string]interface{}{result.Metadata, result.Data} {
+	for _, source := range []map[string]any{result.Metadata, result.Data} {
 		if source == nil {
 			continue
 		}

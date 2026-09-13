@@ -7129,6 +7129,15 @@
     "Your Redemption Codes": "あなたの交換コード",
     "Connect to Meshy2API 3D generation services": "Meshy2API の3D生成サービスに接続",
     "Connect to UnrealSpeech text-to-speech services": "UnrealSpeech のテキスト読み上げサービスに接続",
-    "Connect to Agnes multimodal model services": "Agnes のマルチモーダルモデルサービスに接続"
+    "Connect to Agnes multimodal model services": "Agnes のマルチモーダルモデルサービスに接続",
+    "Disable login two-factor verification": "ログイン時の2要素認証を無効にする",
+    "Disabled two-factor verification at login": "ログイン時の2要素認証を無効にしました",
+    "Enabled two-factor verification at login": "ログイン時の2要素認証を有効にしました",
+    "Login Two-Factor Verification": "ログイン時の2要素認証",
+    "No recent status data for {{name}}": "{{name}} の最近のステータスデータはありません",
+    "Recent status for {{name}}": "{{name}} の最近のステータス",
+    "Set up two-factor authentication before changing this setting.": "この設定を変更する前に、2要素認証を設定してください。",
+    "Enter a current two-factor code to confirm this change.": "この変更を確認するには、現在の2要素認証コードを入力してください。",
+    "Require a two-factor code when signing in": "ログイン時に2要素認証コードを要求する"
   }
 }

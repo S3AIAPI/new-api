@@ -20,6 +20,10 @@ type Verify2FARequest struct {
 	FlowToken string `json:"flow_token,omitempty"`
 }
 
+type UpdateLoginTwoFARequest struct {
+	Enabled *bool `json:"enabled"`
+}
+
 func Setup2FA(c *gin.Context) {
 	authorization := middleware.RequireSecurityProof(c, service.VerificationOperation{Scope: service.VerificationScopeTwoFASetup})
 	if authorization == nil {
@@ -120,6 +124,43 @@ func Get2FAStatus(c *gin.Context) {
 		"message": "",
 		"data":    status,
 	})
+}
+
+func UpdateLoginTwoFA(c *gin.Context) {
+	identity, ok := middleware.GetSessionAuthIdentity(c)
+	if !ok {
+		writeSecurityOperationError(c, service.ErrAuthTokenInvalid)
+		return
+	}
+	var req UpdateLoginTwoFARequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil || req.Enabled == nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if !*req.Enabled && middleware.RequireSecurityProof(c, service.VerificationOperation{Scope: service.VerificationScopeLoginTwoFADisable}) == nil {
+		return
+	}
+	if err := model.UpdateLoginTwoFactorSettingForSession(identity, *req.Enabled); err != nil {
+		writeSecurityOperationError(c, err)
+		return
+	}
+
+	data := gin.H{"enabled": *req.Enabled}
+	action := "user.login_2fa_enable"
+	if !*req.Enabled {
+		bundle, err := service.AdvanceCurrentSessionToUserVersion(identity, "login_twofa_disabled")
+		if err != nil {
+			writeSecurityOperationError(c, err)
+			return
+		}
+		for key, value := range authRotationData(bundle) {
+			data[key] = value
+		}
+		action = "user.login_2fa_disable"
+	}
+	recordUserSecurityAudit(c, identity.UserID, action, nil)
+	setAuthNoStore(c)
+	common.ApiSuccess(c, data)
 }
 
 // RegenerateBackupCodes 重新生成备用码

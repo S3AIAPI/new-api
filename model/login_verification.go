@@ -10,14 +10,16 @@ import (
 // UserVerificationState is an authoritative, credential-free projection for
 // choosing an authentication method. Loading it never fetches credential secrets.
 type UserVerificationState struct {
-	UserID      int
-	Status      int
-	Role        int
-	AuthVersion int64
-	HasPassword bool
-	HasTwoFA    bool
-	TwoFALocked bool
-	HasPasskey  bool
+	UserID                 int
+	Status                 int
+	Role                   int
+	AuthVersion            int64
+	HasPassword            bool
+	HasTwoFA               bool
+	TwoFALocked            bool
+	HasPasskey             bool
+	Setting                string
+	LoginTwoFactorDisabled bool `gorm:"-"`
 }
 
 func GetUserVerificationState(userID int) (*UserVerificationState, error) {
@@ -30,7 +32,7 @@ func getUserVerificationState(tx *gorm.DB, userID int, forUpdate bool) (*UserVer
 	}
 	var state UserVerificationState
 	query := tx.Model(&User{}).Select(
-		"id AS user_id, status, role, auth_version, CASE WHEN password <> '' THEN 1 ELSE 0 END AS has_password, "+
+		"id AS user_id, status, role, auth_version, setting, CASE WHEN password <> '' THEN 1 ELSE 0 END AS has_password, "+
 			"EXISTS (?) AS has_two_fa, EXISTS (?) AS two_fa_locked, EXISTS (?) AS has_passkey",
 		tx.Model(&TwoFA{}).Select("1").Where("user_id = ? AND is_enabled = ?", userID, true),
 		tx.Model(&TwoFA{}).Select("1").Where("user_id = ? AND is_enabled = ? AND locked_until > ?", userID, true, time.Now()),
@@ -42,6 +44,8 @@ func getUserVerificationState(tx *gorm.DB, userID int, forUpdate bool) (*UserVer
 	if err := query.Take(&state).Error; err != nil {
 		return nil, err
 	}
+	state.LoginTwoFactorDisabled = !(&User{Setting: state.Setting}).GetSetting().IsLoginTwoFactorEnabled()
+	state.Setting = ""
 	return &state, nil
 }
 

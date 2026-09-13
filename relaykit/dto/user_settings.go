@@ -16,6 +16,11 @@ type UserSetting struct {
 	SidebarModules                   string  `json:"sidebar_modules,omitempty"`                      // SidebarModules 左侧边栏模块配置
 	BillingPreference                string  `json:"billing_preference,omitempty"`                   // BillingPreference 扣费策略（订阅/钱包）
 	Language                         string  `json:"language,omitempty"`                             // Language 用户语言偏好 (zh, en)
+	LoginTwoFactorEnabled            *bool   `json:"login_two_factor_enabled,omitempty"`             // 登录时是否要求两步验证；缺失时默认开启
+}
+
+func (setting UserSetting) IsLoginTwoFactorEnabled() bool {
+	return setting.LoginTwoFactorEnabled == nil || *setting.LoginTwoFactorEnabled
 }
 
 var (

@@ -7129,6 +7129,15 @@
     "Your Redemption Codes": "Your Redemption Codes",
     "Connect to Meshy2API 3D generation services": "Connect to Meshy2API 3D generation services",
     "Connect to UnrealSpeech text-to-speech services": "Connect to UnrealSpeech text-to-speech services",
-    "Connect to Agnes multimodal model services": "Connect to Agnes multimodal model services"
+    "Connect to Agnes multimodal model services": "Connect to Agnes multimodal model services",
+    "Disable login two-factor verification": "Disable login two-factor verification",
+    "Disabled two-factor verification at login": "Disabled two-factor verification at login",
+    "Enabled two-factor verification at login": "Enabled two-factor verification at login",
+    "Login Two-Factor Verification": "Login Two-Factor Verification",
+    "No recent status data for {{name}}": "No recent status data for {{name}}",
+    "Recent status for {{name}}": "Recent status for {{name}}",
+    "Set up two-factor authentication before changing this setting.": "Set up two-factor authentication before changing this setting.",
+    "Enter a current two-factor code to confirm this change.": "Enter a current two-factor code to confirm this change.",
+    "Require a two-factor code when signing in": "Require a two-factor code when signing in"
   }
 }

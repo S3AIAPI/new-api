@@ -7129,6 +7129,15 @@
     "Your Redemption Codes": "Vos codes de réduction",
     "Connect to Meshy2API 3D generation services": "Se connecter aux services de génération 3D Meshy2API",
     "Connect to UnrealSpeech text-to-speech services": "Se connecter aux services de synthèse vocale UnrealSpeech",
-    "Connect to Agnes multimodal model services": "Se connecter aux services de modèles multimodaux Agnes"
+    "Connect to Agnes multimodal model services": "Se connecter aux services de modèles multimodaux Agnes",
+    "Disable login two-factor verification": "Désactiver la validation à deux facteurs à la connexion",
+    "Disabled two-factor verification at login": "Validation à deux facteurs désactivée à la connexion",
+    "Enabled two-factor verification at login": "Validation à deux facteurs activée à la connexion",
+    "Login Two-Factor Verification": "Validation à deux facteurs à la connexion",
+    "No recent status data for {{name}}": "Aucune donnée d'état récente pour {{name}}",
+    "Recent status for {{name}}": "État récent de {{name}}",
+    "Set up two-factor authentication before changing this setting.": "Configurez d'abord l'authentification à deux facteurs.",
+    "Enter a current two-factor code to confirm this change.": "Saisissez un code à deux facteurs valide pour confirmer.",
+    "Require a two-factor code when signing in": "Exiger un code à deux facteurs lors de la connexion"
   }
 }

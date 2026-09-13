@@ -26,6 +26,7 @@ const (
 	VerificationScopeTwoFASetup          = "2fa.setup"
 	VerificationScopeTwoFADisable        = "2fa.disable"
 	VerificationScopeTwoFABackupCodes    = "2fa.backup_codes.regenerate"
+	VerificationScopeLoginTwoFADisable   = "2fa.login.disable"
 	VerificationScopeLogin               = "auth.login"
 	VerificationScopeAccessTokenGenerate = "access_token.generate"
 	VerificationScopeAccessTokenRevoke   = "access_token.revoke"
@@ -118,7 +119,7 @@ func BindVerificationOperation(operation VerificationOperation) (VerificationBin
 		}
 		normalized = context
 	case VerificationScopePasskeyRegister, VerificationScopePasskeyDelete, VerificationScopeTwoFASetup,
-		VerificationScopeTwoFADisable, VerificationScopeTwoFABackupCodes,
+		VerificationScopeTwoFADisable, VerificationScopeTwoFABackupCodes, VerificationScopeLoginTwoFADisable,
 		VerificationScopeAccessTokenGenerate, VerificationScopeAccessTokenRevoke,
 		VerificationScopePasswordSet, VerificationScopePasswordChange, VerificationScopeAccountDelete:
 		if len(fields) != 0 {
@@ -171,7 +172,7 @@ type VerificationRequirements struct {
 // support and disabled providers never turn an enrolled factor into an absent one.
 func securityVerificationPolicy(scope string, state model.UserVerificationState) ([]VerificationMethodOption, error) {
 	var methods []string
-	if state.HasTwoFA {
+	if state.HasTwoFA && (scope != VerificationScopeLogin || !state.LoginTwoFactorDisabled) {
 		methods = append(methods, VerificationMethodTwoFA)
 	}
 	if state.HasPasskey {
@@ -183,6 +184,11 @@ func securityVerificationPolicy(scope string, state model.UserVerificationState)
 		if !state.HasTwoFA {
 			return nil, model.ErrTwoFANotEnabled
 		}
+	case VerificationScopeLoginTwoFADisable:
+		if !state.HasTwoFA {
+			return nil, model.ErrTwoFANotEnabled
+		}
+		methods = []string{VerificationMethodTwoFA}
 	case VerificationScopePasskeyRegister, VerificationScopeTwoFASetup,
 		VerificationScopeAccessTokenGenerate, VerificationScopeAccessTokenRevoke,
 		VerificationScopeAccountBind, VerificationScopeAccountUnbind,

@@ -7129,6 +7129,15 @@
     "Your Redemption Codes": "Ваши коды пополнения",
     "Connect to Meshy2API 3D generation services": "Подключение к сервисам 3D-генерации Meshy2API",
     "Connect to UnrealSpeech text-to-speech services": "Подключение к сервисам синтеза речи UnrealSpeech",
-    "Connect to Agnes multimodal model services": "Подключение к сервисам мультимодальных моделей Agnes"
+    "Connect to Agnes multimodal model services": "Подключение к сервисам мультимодальных моделей Agnes",
+    "Disable login two-factor verification": "Отключить двухфакторную проверку при входе",
+    "Disabled two-factor verification at login": "Двухфакторная проверка при входе отключена",
+    "Enabled two-factor verification at login": "Двухфакторная проверка при входе включена",
+    "Login Two-Factor Verification": "Двухфакторная проверка при входе",
+    "No recent status data for {{name}}": "Нет свежих данных о состоянии {{name}}",
+    "Recent status for {{name}}": "Недавнее состояние {{name}}",
+    "Set up two-factor authentication before changing this setting.": "Настройте двухфакторную аутентификацию перед изменением этой настройки.",
+    "Enter a current two-factor code to confirm this change.": "Введите действующий код двухфакторной аутентификации для подтверждения.",
+    "Require a two-factor code when signing in": "Запрашивать код двухфакторной аутентификации при входе"
   }
 }

@@ -1963,7 +1963,21 @@ channel-prefixed `/v1/agnesapi?video_id=...` endpoint (with `model_name` for
 Agnes 2.5 models). The Playground accepts up to five reference images and can
 insert Agnes `<Picture N>` references into the prompt. A channel-level option
 can upload incoming base64 images through the configured Meshy2API image proxy
-without enabling the global image rewrite switch.
+without enabling the global image rewrite switch. Agnes 2.5 keyframe requests
+accept the provider's canonical `first_frame` and `last_frame` fields while
+retaining the existing one- or two-item `images` compatibility path.
+
+Users can keep an enrolled TOTP factor while disabling only its login-time
+challenge from **Security & Access**. The policy defaults to enabled when the
+stored user setting is absent. Disabling it requires a current TOTP or backup
+code, advances the account authentication version, rotates the current
+session, and revokes other sessions; ordinary profile-setting updates cannot
+change the policy. Re-enabling the login challenge does not require another
+proof.
+
+The dashboard Uptime Kuma panel includes the latest 60 public heartbeat states
+for each monitor as a compact status strip. The gateway exposes only heartbeat
+status and time, and the newest heartbeat remains the monitor's current state.
 
 Check-in rewards can be configured as deductible credit for selected groups.
 Eligible requests consume that credit before wallet quota, and settlement or
@@ -1992,6 +2006,16 @@ Files added for the Agnes channel and Playground video flow:
 - `relay/channel/agnes/`
 - `relay/channel/task/agnes/`
 - `web/src/features/playground/components/generation/video-playground.tsx`
+
+Files for the login 2FA policy and Uptime Kuma history:
+
+- `model/login_verification.go`
+- `model/user.go`
+- `service/security_verification.go`
+- `controller/twofa.go`
+- `controller/uptime_kuma.go`
+- `web/src/features/security/`
+- `web/src/features/dashboard/components/overview/uptime-panel.tsx`
 
 ## Upstream sync checklist
 

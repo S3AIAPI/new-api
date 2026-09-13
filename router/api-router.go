@@ -142,6 +142,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/2fa/setup", middleware.DisableCache(), controller.Setup2FA)
 				selfRoute.POST("/2fa/enable", middleware.DisableCache(), controller.Enable2FA)
 				selfRoute.POST("/2fa/disable", middleware.DisableCache(), controller.Disable2FA)
+				selfRoute.PUT("/2fa/login-verification", middleware.DisableCache(), controller.UpdateLoginTwoFA)
 				selfRoute.POST("/2fa/backup_codes", middleware.DisableCache(), controller.RegenerateBackupCodes)
 
 				// Check-in routes

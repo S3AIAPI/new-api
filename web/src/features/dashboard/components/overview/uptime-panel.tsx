@@ -23,6 +23,12 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { getUptimeStatus } from '@/features/dashboard/api'
 import type {
   UptimeGroupResult,
@@ -39,10 +45,83 @@ const STATUS_COLOR_MAP: Record<number, string> = {
   3: 'bg-blue-500',
 }
 const DEFAULT_STATUS_COLOR = 'bg-muted-foreground/40'
+const STATUS_LABEL_MAP: Record<number, string> = {
+  1: 'Operational',
+  0: 'Unavailable',
+  2: 'Pending',
+  3: 'Maintenance',
+}
+const EMPTY_HISTORY_LENGTH = 30
+const EMPTY_HISTORY_KEYS = Array.from(
+  { length: EMPTY_HISTORY_LENGTH },
+  (_, index) => `empty-status-${index}`
+)
 
 const StatusDot = memo(function StatusDot(props: { status: number }) {
   const color = STATUS_COLOR_MAP[props.status] ?? DEFAULT_STATUS_COLOR
   return <span className={cn('inline-block size-2 rounded-full', color)} />
+})
+
+const UptimeHistoryDots = memo(function UptimeHistoryDots(props: {
+  monitor: UptimeMonitor
+}) {
+  const { t } = useTranslation()
+  const heartbeats = props.monitor.heartbeats?.slice(-60) ?? []
+
+  if (!heartbeats.length) {
+    return (
+      <div
+        role='img'
+        aria-label={t('No recent status data for {{name}}', {
+          name: props.monitor.name,
+        })}
+        className='flex h-3 w-full gap-0.5 overflow-hidden'
+      >
+        {EMPTY_HISTORY_KEYS.map((key) => (
+          <span
+            key={key}
+            aria-hidden='true'
+            className='bg-muted-foreground/15 min-w-0 flex-1 rounded-[1px]'
+          />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <TooltipProvider delay={100}>
+      <div
+        role='img'
+        aria-label={t('Recent status for {{name}}', {
+          name: props.monitor.name,
+        })}
+        className='flex h-3 w-full gap-0.5 overflow-hidden'
+      >
+        {heartbeats.map((heartbeat) => {
+          const statusLabel = t(STATUS_LABEL_MAP[heartbeat.status] ?? 'Unknown')
+          return (
+            <Tooltip key={`${heartbeat.time}-${heartbeat.status}`}>
+              <TooltipTrigger
+                render={
+                  <span
+                    aria-label={`${statusLabel}: ${heartbeat.time}`}
+                    className={cn(
+                      'min-w-0 flex-1 rounded-[1px]',
+                      STATUS_COLOR_MAP[heartbeat.status] ?? DEFAULT_STATUS_COLOR
+                    )}
+                  />
+                }
+              />
+              <TooltipContent>
+                <span className='font-medium'>{statusLabel}</span>
+                <span className='opacity-70'>{heartbeat.time}</span>
+              </TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </div>
+    </TooltipProvider>
+  )
 })
 
 export function UptimePanel() {
@@ -145,7 +224,7 @@ export function UptimePanel() {
                   <div
                     key={monitor.name}
                     className={cn(
-                      'hover:bg-muted/40 flex items-center justify-between gap-2 px-3 py-2 transition-colors sm:px-5 sm:py-2.5',
+                      'hover:bg-muted/40 space-y-2 px-3 py-2.5 transition-colors sm:px-5 sm:py-3',
                       monitorIdx < (group.monitors?.length || 0) - 1 &&
                         'border-border/40 border-b',
                       groupIdx < groups.length - 1 &&
@@ -153,18 +232,21 @@ export function UptimePanel() {
                         'border-border/60 border-b'
                     )}
                   >
-                    <div className='flex min-w-0 items-center gap-2.5'>
-                      <StatusDot status={monitor.status} />
-                      <span className='truncate text-sm'>{monitor.name}</span>
-                      {monitor.group && (
-                        <span className='text-muted-foreground/40 shrink-0 text-xs'>
-                          ({monitor.group})
-                        </span>
-                      )}
+                    <div className='flex items-center justify-between gap-2'>
+                      <div className='flex min-w-0 items-center gap-2.5'>
+                        <StatusDot status={monitor.status} />
+                        <span className='truncate text-sm'>{monitor.name}</span>
+                        {monitor.group && (
+                          <span className='text-muted-foreground/40 hidden shrink-0 text-xs sm:inline'>
+                            ({monitor.group})
+                          </span>
+                        )}
+                      </div>
+                      <span className='text-foreground shrink-0 font-mono text-sm font-semibold tabular-nums'>
+                        {((monitor.uptime ?? 0) * 100).toFixed(2)}%
+                      </span>
                     </div>
-                    <span className='text-foreground shrink-0 font-mono text-sm font-semibold tabular-nums'>
-                      {((monitor.uptime ?? 0) * 100).toFixed(2)}%
-                    </span>
+                    <UptimeHistoryDots monitor={monitor} />
                   </div>
                 )
               )}
