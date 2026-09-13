@@ -1,5 +1,11 @@
 package model
 
+import (
+	"encoding/csv"
+	"io"
+	"strconv"
+)
+
 type Midjourney struct {
 	Id          int    `json:"id"`
 	Code        int    `json:"code"`
@@ -34,6 +40,87 @@ type TaskQueryParams struct {
 	MjID           string
 	StartTimestamp string
 	EndTimestamp   string
+}
+
+var midjourneyCSVHeader = []string{
+	"id", "code", "user_id", "action", "mj_id", "prompt", "prompt_en",
+	"description", "state", "submit_time", "start_time", "finish_time",
+	"image_url", "video_url", "video_urls", "status", "progress", "fail_reason",
+	"channel_id", "quota", "buttons", "properties",
+}
+
+var userMidjourneyCSVHeader = []string{
+	"id", "code", "user_id", "action", "mj_id", "prompt", "prompt_en",
+	"description", "state", "submit_time", "start_time", "finish_time",
+	"image_url", "video_url", "video_urls", "status", "progress", "fail_reason",
+	"quota", "buttons", "properties",
+}
+
+// WriteMidjourneyCSV streams all matching drawing logs without materializing
+// the complete result set or requiring client-side pagination.
+func WriteMidjourneyCSV(writer io.Writer, userId int, queryParams TaskQueryParams) error {
+	query := DB.Model(&Midjourney{})
+	if userId > 0 {
+		query = query.Where("user_id = ?", userId)
+		// A self export cannot be narrowed by or expose administrator-only
+		// channel metadata.
+		queryParams.ChannelID = ""
+	} else if queryParams.ChannelID != "" {
+		query = query.Where("channel_id = ?", queryParams.ChannelID)
+	}
+	if queryParams.MjID != "" {
+		query = query.Where("mj_id = ?", queryParams.MjID)
+	}
+	if queryParams.StartTimestamp != "" {
+		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
+	}
+	if queryParams.EndTimestamp != "" {
+		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+
+	rows, err := query.Order("id desc").Rows()
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	csvWriter := csv.NewWriter(writer)
+	header := midjourneyCSVHeader
+	if userId > 0 {
+		header = userMidjourneyCSVHeader
+	}
+	if err := csvWriter.Write(header); err != nil {
+		return err
+	}
+	for rows.Next() {
+		var entry Midjourney
+		if err := query.ScanRows(rows, &entry); err != nil {
+			return err
+		}
+		record := []string{
+			strconv.Itoa(entry.Id), strconv.Itoa(entry.Code), strconv.Itoa(entry.UserId),
+			entry.Action, entry.MjId, entry.Prompt, entry.PromptEn, entry.Description,
+			entry.State, strconv.FormatInt(entry.SubmitTime, 10), strconv.FormatInt(entry.StartTime, 10),
+			strconv.FormatInt(entry.FinishTime, 10), entry.ImageUrl, entry.VideoUrl, entry.VideoUrls,
+			entry.Status, entry.Progress, entry.FailReason,
+		}
+		if userId == 0 {
+			record = append(record, strconv.Itoa(entry.ChannelId))
+		}
+		properties := entry.Properties
+		if userId > 0 {
+			properties = sanitizeUserExportJSON([]byte(properties))
+		}
+		record = append(record, strconv.Itoa(entry.Quota), entry.Buttons, properties)
+		if err := csvWriter.Write(record); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	csvWriter.Flush()
+	return csvWriter.Error()
 }
 
 func GetAllUserTask(userId int, startIdx int, num int, queryParams TaskQueryParams) []*Midjourney {

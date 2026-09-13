@@ -202,6 +202,11 @@ func noteQuotaClamp(relayInfo *relaycommon.RelayInfo, clamp *common.QuotaClamp) 
 }
 
 func composeTieredTextQuota(relayInfo *relaycommon.RelayInfo, summary textQuotaSummary, tieredQuota int, tieredResult *billingexpr.TieredResult) int {
+	if relayInfo.PriceData.BillingFree {
+		quota, clamp := common.QuotaFromDecimalChecked(summary.ToolCallSurchargeQuota)
+		noteQuotaClamp(relayInfo, clamp)
+		return quota
+	}
 	if summary.ToolCallSurchargeQuota.IsZero() {
 		return tieredQuota
 	}
@@ -377,6 +382,11 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		summary.Quota = 0
 	} else if !ratio.IsZero() && summary.Quota == 0 {
 		summary.Quota = 1
+	}
+	if relayInfo.PriceData.BillingFree {
+		quota, clamp := common.QuotaFromDecimalChecked(summary.ToolCallSurchargeQuota)
+		summary.Quota = quota
+		noteQuotaClamp(relayInfo, clamp)
 	}
 
 	return summary

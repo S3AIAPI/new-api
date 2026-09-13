@@ -310,10 +310,10 @@ func UpdateOption(c *gin.Context) {
 			common.ApiErrorMsg(c, "CaptchaType must be turnstile, hcaptcha, or cap")
 			return
 		}
-	case "checkin_setting.min_user_quota":
+	case "checkin_setting.min_quota", "checkin_setting.max_quota", "checkin_setting.min_user_quota", "checkin_setting.min_used_quota", "checkin_setting.daily_user_limit", "checkin_setting.daily_quota_limit":
 		quota, parseErr := strconv.Atoi(option.Value.(string))
 		if parseErr != nil || quota < 0 {
-			common.ApiErrorMsg(c, "Check-in minimum user quota must be a non-negative integer")
+			common.ApiErrorMsg(c, "Check-in quota and limit settings must be non-negative integers")
 			return
 		}
 	case "checkin_setting.deductible_groups":

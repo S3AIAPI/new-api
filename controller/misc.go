@@ -151,6 +151,9 @@ func GetStatus(c *gin.Context) {
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
 		"checkin_min_user_quota":      operation_setting.GetCheckinSetting().MinUserQuota,
+		"checkin_min_used_quota":      operation_setting.GetCheckinSetting().MinUsedQuota,
+		"checkin_daily_user_limit":    operation_setting.GetCheckinSetting().DailyUserLimit,
+		"checkin_daily_quota_limit":   operation_setting.GetCheckinSetting().DailyQuotaLimit,
 		"checkin_deductible_groups":   operation_setting.GetCheckinSetting().DeductibleGroups,
 	}
 

@@ -110,7 +110,10 @@ export function PresetOne() {
   const viewport = { once: true, amount: 0.2 }
 
   return (
-    <PublicLayout showMainContainer={false} headerProps={{ floating: true }}>
+    <PublicLayout
+      showMainContainer={false}
+      headerProps={{ floating: true, animateFloatingEntrance: false }}
+    >
       <div
         data-motion-mode={shouldReduceMotion ? 'reduced' : 'full'}
         className='relative min-h-svh overflow-hidden bg-[#202a30] text-white'

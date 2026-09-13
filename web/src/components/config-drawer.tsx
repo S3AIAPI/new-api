@@ -213,17 +213,18 @@ function RadioGroupItem(props: {
 
 function ThemeConfig() {
   const { t } = useTranslation()
-  const { defaultTheme, theme, setTheme } = useTheme()
+  const { defaultTheme, isForced, theme, setTheme } = useTheme()
   return (
     <div>
       <SectionTitle
         title={t('Theme')}
-        showReset={theme !== defaultTheme}
+        showReset={!isForced && theme !== defaultTheme}
         onReset={() => setTheme(defaultTheme)}
       />
       <Radio
         value={theme}
         onValueChange={setTheme}
+        disabled={isForced}
         className='grid w-full max-w-md grid-cols-3 gap-4'
         aria-label={t('Select theme preference')}
         aria-describedby='theme-description'

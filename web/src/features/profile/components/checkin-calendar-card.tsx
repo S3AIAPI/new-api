@@ -51,7 +51,7 @@ import { createServerError } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
 import { getCheckinStatus, performCheckin } from '../api'
-import type { CheckinRecord } from '../types'
+import type { CheckinRecord, CheckinEligibility } from '../types'
 
 interface CheckinCalendarCardProps {
   checkinEnabled: boolean
@@ -133,13 +133,34 @@ export function CheckinCalendarCard({
 
   const checkedToday = checkinData?.stats?.checked_in_today === true
   const todayAward = checkinRecordsMap[todayString]
-  let checkinSummary = t('Check in daily to receive random quota rewards')
-  if (checkinData?.eligible === false) {
-    checkinSummary = t('Check-in requires a balance greater than {{quota}}.', {
-      quota: formatQuotaWithCurrency(checkinData.min_user_quota, {
-        digitsLarge: 0,
+  const eligibility: CheckinEligibility | undefined = checkinData?.eligibility
+  const eligible = eligibility?.eligible ?? checkinData?.eligible ?? false
+  const balanceMet =
+    eligibility?.balance_met ?? (checkinData?.min_user_quota ?? 0) <= 0
+  const totalSpendMet =
+    eligibility?.total_spend_met ?? (checkinData?.min_used_quota ?? 0) <= 0
+  const dailyUserLimitMet = eligibility?.daily_user_limit_met ?? true
+  const dailyQuotaLimitMet = eligibility?.daily_quota_limit_met ?? true
+  const unmetConditions = [
+    !balanceMet &&
+      t('Balance must be greater than {{quota}}.', {
+        quota: formatQuotaWithCurrency(checkinData?.min_user_quota ?? 0, {
+          digitsLarge: 0,
+        }),
       }),
-    })
+    !totalSpendMet &&
+      t('Total spending must reach {{quota}}.', {
+        quota: formatQuotaWithCurrency(checkinData?.min_used_quota ?? 0, {
+          digitsLarge: 0,
+        }),
+      }),
+    !dailyUserLimitMet && t("Today's check-in user limit has been reached."),
+    !dailyQuotaLimitMet &&
+      t("Today's remaining reward quota is below the maximum award."),
+  ].filter((condition): condition is string => Boolean(condition))
+  let checkinSummary = t('Check in daily to receive random quota rewards')
+  if (!eligible && unmetConditions.length > 0) {
+    checkinSummary = unmetConditions[0]
   } else if (checkedToday && todayAward !== undefined) {
     checkinSummary = `${t('Today')} +${formatQuotaWithCurrency(todayAward)}`
   }
@@ -148,7 +169,7 @@ export function CheckinCalendarCard({
     if (initialLoaded) return
     if (isLoading) return
     if (!checkinData) return
-    setCollapsed(checkedToday || checkinData.eligible === false)
+    setCollapsed(checkedToday)
     setInitialLoaded(true)
   }, [checkinData, checkedToday, initialLoaded, isLoading])
 
@@ -184,6 +205,7 @@ export function CheckinCalendarCard({
   )
 
   const handleCheckinClick = useCallback(() => {
+    if (!eligible || checkedToday) return
     if (!isCaptchaEnabled) {
       void doCheckin()
       return
@@ -209,6 +231,8 @@ export function CheckinCalendarCard({
     isHCaptchaEnabled,
     isTurnstileEnabled,
     hCaptchaSiteKey,
+    eligible,
+    checkedToday,
     t,
     turnstileSiteKey,
   ])
@@ -288,6 +312,8 @@ export function CheckinCalendarCard({
     checkinButtonLabel = t('Loading...')
   } else if (checkedToday) {
     checkinButtonLabel = t('Checked in')
+  } else if (!eligible) {
+    checkinButtonLabel = t('Not eligible')
   }
 
   return (
@@ -392,11 +418,47 @@ export function CheckinCalendarCard({
                 <p className='text-muted-foreground mt-1 line-clamp-2 text-xs sm:text-sm'>
                   {checkinSummary}
                 </p>
+                {!eligible && !checkedToday && unmetConditions.length > 0 && (
+                  <ul className='text-muted-foreground mt-2 list-disc space-y-0.5 pl-4 text-xs'>
+                    {unmetConditions.map((condition) => (
+                      <li key={condition}>{condition}</li>
+                    ))}
+                  </ul>
+                )}
+                {(checkinData?.daily_user_limit ?? 0) > 0 && (
+                  <p className='text-muted-foreground mt-2 text-xs tabular-nums'>
+                    {t('Today checked in {{count}}/{{limit}} users', {
+                      count:
+                        eligibility?.today_user_count ??
+                        checkinData?.today_user_count ??
+                        0,
+                      limit: checkinData?.daily_user_limit,
+                    })}
+                  </p>
+                )}
+                {(checkinData?.daily_quota_limit ?? 0) > 0 && (
+                  <p className='text-muted-foreground text-xs tabular-nums'>
+                    {t('Today awarded {{amount}}/{{limit}} quota', {
+                      amount: formatQuotaWithCurrency(
+                        eligibility?.today_quota_awarded ??
+                          checkinData?.today_quota_awarded ??
+                          0,
+                        { digitsLarge: 0 }
+                      ),
+                      limit: formatQuotaWithCurrency(
+                        checkinData?.daily_quota_limit ?? 0,
+                        {
+                          digitsLarge: 0,
+                        }
+                      ),
+                    })}
+                  </p>
+                )}
               </div>
             </button>
             <Button
               onClick={handleCheckinClick}
-              disabled={checkinLoading || checkedToday}
+              disabled={checkinLoading || checkedToday || !eligible}
               size='sm'
               className='w-full shrink-0 sm:w-auto'
             >

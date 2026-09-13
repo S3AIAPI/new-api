@@ -12,6 +12,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -75,6 +76,10 @@ func PrepareImageBillingForRequest(c *gin.Context, info *relaycommon.RelayInfo, 
 		return types.NewErrorWithStatusCode(err, types.ErrorCodeModelPriceError, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
 	info.PriceData.QuotaToPreConsume = quota
+	if info.PriceData.BillingFree && !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume {
+		info.PriceData.QuotaToPreConsume = 0
+		return nil
+	}
 	if quota == 0 && info.Billing == nil {
 		return nil
 	}

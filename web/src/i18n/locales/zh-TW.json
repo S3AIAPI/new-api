@@ -7138,6 +7138,26 @@
     "Recent status for {{name}}": "{{name}} 的近期狀態",
     "Set up two-factor authentication before changing this setting.": "請先設定兩步驟驗證，再變更此設定。",
     "Enter a current two-factor code to confirm this change.": "請輸入目前的兩步驟驗證碼以確認此變更。",
-    "Require a two-factor code when signing in": "登入時要求輸入兩步驟驗證碼"
+    "Require a two-factor code when signing in": "登入時要求輸入兩步驟驗證碼",
+    "Balance must be greater than {{quota}}.": "餘額必須大於 {{quota}}。",
+    "Check-in spending threshold": "簽到消費門檻",
+    "Daily check-in quota limit": "每日簽到額度上限",
+    "Daily check-in user limit": "每日簽到人數上限",
+    "Export CSV": "匯出 CSV",
+    "Export progress": "匯出進度",
+    "Exporting all matching records...": "正在匯出所有符合的記錄……",
+    "Failed to export logs": "匯出日誌失敗",
+    "Force dark mode": "強制深色模式",
+    "Force light mode": "強制淺色模式",
+    "No override": "不覆蓋",
+    "Not eligible": "不符合條件",
+    "Set to 0 for unlimited daily check-in rewards.": "設為 0 表示每日簽到贈金不限額。",
+    "Set to 0 for unlimited daily check-in users.": "設為 0 表示每日簽到人數不限。",
+    "Set to 0 to disable. Users must have spent at least this quota amount.": "設為 0 表示停用。使用者累計消費額度必須達到此數值。",
+    "The server is preparing your CSV file.": "伺服器正在準備 CSV 檔案。",
+    "Theme override": "主題覆蓋",
+    "Today awarded {{amount}}/{{limit}} quota": "今日已發放 {{amount}}/{{limit}} 額度",
+    "Today checked in {{count}}/{{limit}} users": "今日已簽到 {{count}}/{{limit}} 人",
+    "Total spending must reach {{quota}}.": "累計消費必須達到 {{quota}}。"
   }
 }

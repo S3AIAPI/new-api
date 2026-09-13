@@ -18,14 +18,25 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 import { useNavigate, getRouteApi } from '@tanstack/react-router'
-import { type Table } from '@tanstack/react-table'
+import type { Table } from '@tanstack/react-table'
+import { Download } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Button } from '@/components/ui/button'
+
+import { exportMidjourneyLogsCsv, exportTaskLogsCsv } from '../api'
 import { buildSearchParams } from '../lib/filter'
-import { getDefaultTimeRange } from '../lib/utils'
-import type { DrawingLogFilters, LogCategory, TaskLogFilters } from '../types'
+import { buildBaseParams, getDefaultTimeRange } from '../lib/utils'
+import type {
+  DrawingLogFilters,
+  GetMidjourneyLogsParams,
+  GetTaskLogsParams,
+  LogCategory,
+  TaskLogFilters,
+} from '../types'
 import { CompactDateTimeRangePicker } from './compact-date-time-range-picker'
+import { LogsExportDialog } from './logs-export-dialog'
 import {
   LogsFilterField,
   LogsFilterInput,
@@ -71,6 +82,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
   const searchParams = route.useSearch()
   const { isAdminView: isAdmin } = useLogsViewScope()
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
+  const [exportOpen, setExportOpen] = useState(false)
 
   const [filters, setFilters] = useState<TaskLogsFilters>(() => {
     const { start, end } = getDefaultTimeRange()
@@ -199,28 +211,86 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     </LogsFilterField>
   ) : null
 
+  const exportParams = useCallback(() => {
+    const base = buildBaseParams({
+      page: 1,
+      pageSize: 1,
+      searchParams,
+      useMilliseconds: props.logCategory === 'drawing',
+    })
+    const { p: _page, page_size: _pageSize, ...withoutPagination } = base
+    const filterParams: Record<string, string> = {}
+    if (searchParams.filter) {
+      if (props.logCategory === 'drawing') {
+        filterParams.mj_id = String(searchParams.filter)
+      } else {
+        filterParams.task_id = String(searchParams.filter)
+      }
+    }
+    return {
+      ...withoutPagination,
+      ...filterParams,
+    }
+  }, [props.logCategory, searchParams])
+
+  const exportAction = (
+    <Button
+      type='button'
+      variant='outline'
+      onClick={() => setExportOpen(true)}
+      disabled={fetchingLogs > 0 || exportOpen}
+    >
+      <Download />
+      {t('Export CSV')}
+    </Button>
+  )
+
   return (
-    <LogsFilterToolbar
-      table={props.table}
-      primaryFilters={
-        <>
-          {dateRangeFilter}
-          {taskIdFilter}
-          {channelFilter}
-        </>
-      }
-      mobilePinnedFilters={dateRangeFilter}
-      mobileFilters={
-        <>
-          {taskIdFilter}
-          {channelFilter}
-        </>
-      }
-      mobileFilterCount={[filterValue, filters.channel].filter(Boolean).length}
-      hasActiveFilters={hasAdditionalFilters}
-      onSearch={handleApply}
-      searchLoading={fetchingLogs > 0}
-      onReset={handleReset}
-    />
+    <>
+      <LogsFilterToolbar
+        table={props.table}
+        actionStart={exportAction}
+        primaryFilters={
+          <>
+            {dateRangeFilter}
+            {taskIdFilter}
+            {channelFilter}
+          </>
+        }
+        mobilePinnedFilters={dateRangeFilter}
+        mobileFilters={
+          <>
+            {taskIdFilter}
+            {channelFilter}
+          </>
+        }
+        mobileFilterCount={
+          [filterValue, filters.channel].filter(Boolean).length
+        }
+        hasActiveFilters={hasAdditionalFilters}
+        onSearch={handleApply}
+        searchLoading={fetchingLogs > 0}
+        onReset={handleReset}
+      />
+      {exportOpen && (
+        <LogsExportDialog
+          open
+          fileName={`${props.logCategory}-logs-${Date.now()}.csv`}
+          request={() => {
+            const params = exportParams()
+            return props.logCategory === 'drawing'
+              ? exportMidjourneyLogsCsv(
+                  params as Omit<GetMidjourneyLogsParams, 'p' | 'page_size'>,
+                  isAdmin
+                )
+              : exportTaskLogsCsv(
+                  params as Omit<GetTaskLogsParams, 'p' | 'page_size'>,
+                  isAdmin
+                )
+          }}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
+    </>
   )
 }

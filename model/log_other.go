@@ -1,9 +1,11 @@
 package model
 
 import (
+	"bytes"
 	"encoding/json"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 )
@@ -20,6 +22,7 @@ var legacySensitiveLogOtherKeys = []string{
 	"channel_id",
 	"channel_name",
 	"channel_type",
+	"upstream_request_id",
 	"reject_reason",
 }
 
@@ -209,6 +212,84 @@ func normalizeLegacyRejectReason(values map[string]json.RawMessage) bool {
 	return true
 }
 
+func isUserHiddenLogOtherKey(key string) bool {
+	key = strings.ToLower(strings.NewReplacer("_", "", "-", "").Replace(key))
+	switch key {
+	case "channel", "channelid", "channelname", "channeltype",
+		"upstreamrequestid", "upstreamtaskid", "rejectreason":
+		return true
+	default:
+		return false
+	}
+}
+
+// sanitizeUserExportJSON removes provider/channel metadata from user-owned
+// export fields. Invalid historical payloads are omitted rather than copied.
+func sanitizeUserExportJSON(value []byte) string {
+	trimmed := bytes.TrimSpace(value)
+	if len(trimmed) == 0 || !json.Valid(trimmed) {
+		return ""
+	}
+	redacted, _ := redactUserLogOtherJSON(json.RawMessage(trimmed))
+	return string(redacted)
+}
+
+func redactUserLogOtherJSON(value json.RawMessage) (json.RawMessage, bool) {
+	trimmed := bytes.TrimSpace(value)
+	if len(trimmed) == 0 {
+		return value, false
+	}
+	switch trimmed[0] {
+	case '{':
+		var object map[string]json.RawMessage
+		if err := common.Unmarshal(trimmed, &object); err != nil {
+			return value, false
+		}
+		changed := false
+		for key, item := range object {
+			if isUserHiddenLogOtherKey(key) {
+				delete(object, key)
+				changed = true
+				continue
+			}
+			if next, itemChanged := redactUserLogOtherJSON(item); itemChanged {
+				object[key] = next
+				changed = true
+			}
+		}
+		if !changed {
+			return value, false
+		}
+		encoded, err := common.Marshal(object)
+		if err != nil {
+			return value, false
+		}
+		return encoded, true
+	case '[':
+		var array []json.RawMessage
+		if err := common.Unmarshal(trimmed, &array); err != nil {
+			return value, false
+		}
+		changed := false
+		for index, item := range array {
+			if next, itemChanged := redactUserLogOtherJSON(item); itemChanged {
+				array[index] = next
+				changed = true
+			}
+		}
+		if !changed {
+			return value, false
+		}
+		encoded, err := common.Marshal(array)
+		if err != nil {
+			return value, false
+		}
+		return encoded, true
+	default:
+		return value, false
+	}
+}
+
 // formatLogOtherJSON applies the role projection while keeping untouched JSON
 // values as RawMessage. This preserves integers larger than JavaScript's safe
 // range instead of round-tripping them through float64.
@@ -236,6 +317,12 @@ func formatLogOtherJSON(value string, visibility logOtherVisibility) string {
 		for _, key := range legacySensitiveLogOtherKeys {
 			if _, exists := values[key]; exists {
 				delete(values, key)
+				changed = true
+			}
+		}
+		for key, item := range values {
+			if next, itemChanged := redactUserLogOtherJSON(item); itemChanged {
+				values[key] = next
 				changed = true
 			}
 		}

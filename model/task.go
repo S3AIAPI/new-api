@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"context"
 	"database/sql/driver"
+	"encoding/csv"
 	"encoding/json"
+	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -163,6 +167,7 @@ type TaskBillingContext struct {
 	OtherRatios     map[string]float64           `json:"other_ratios,omitempty"`      // 附加倍率（时长、分辨率等）
 	OriginModelName string                       `json:"origin_model_name,omitempty"` // 模型名称，必须为OriginModelName
 	PerCallBilling  bool                         `json:"per_call_billing,omitempty"`  // 按次计费：跳过轮询阶段的差额结算
+	BillingFree     bool                         `json:"billing_free,omitempty"`
 	TieredSnapshot  *billingexpr.BillingSnapshot `json:"tiered_snapshot,omitempty"`
 }
 
@@ -224,6 +229,164 @@ type SyncTaskQueryParams struct {
 	StartTimestamp int64
 	EndTimestamp   int64
 	UserIDs        []int
+}
+
+var taskCSVHeader = []string{
+	"id", "created_at", "updated_at", "task_id", "platform", "user_id", "username",
+	"group", "channel_id", "quota", "action", "status", "fail_reason", "result_url",
+	"submit_time", "start_time", "finish_time", "progress", "properties", "data",
+	"admin_request_id", "admin_request_path", "admin_plugin_key", "admin_plugin_name",
+	"admin_plugin_version", "admin_plugin_author", "root_plugin_key", "root_plugin_version",
+	"root_plugin_api_version", "root_plugin_generation", "upstream_task_id", "node_name",
+}
+
+var userTaskCSVHeader = []string{
+	"id", "created_at", "updated_at", "task_id", "platform", "user_id", "username",
+	"group", "quota", "action", "status", "fail_reason", "result_url", "submit_time",
+	"start_time", "finish_time", "progress", "properties", "data",
+}
+
+func taskFailReasonIsLegacyResultURL(value string) bool {
+	value = strings.TrimSpace(value)
+	return strings.HasPrefix(strings.ToLower(value), "https://") ||
+		strings.HasPrefix(strings.ToLower(value), "http://") ||
+		strings.HasPrefix(strings.ToLower(value), "data:")
+}
+
+// WriteTaskCSV streams public task log fields and role-appropriate metadata.
+// Private task data, including provider credentials, is intentionally omitted.
+func WriteTaskCSV(writer io.Writer, userId int, queryParams SyncTaskQueryParams, viewerRole int, selfView bool) error {
+	query := DB.Model(&Task{})
+	if userId > 0 {
+		query = query.Where("user_id = ?", userId)
+	}
+	if queryParams.ChannelID != "" && !selfView {
+		query = query.Where("channel_id = ?", queryParams.ChannelID)
+	}
+	if queryParams.Platform != "" {
+		query = query.Where("platform = ?", queryParams.Platform)
+	}
+	if queryParams.UserID != "" && !selfView {
+		query = query.Where("user_id = ?", queryParams.UserID)
+	}
+	if len(queryParams.UserIDs) > 0 && !selfView {
+		query = query.Where("user_id in (?)", queryParams.UserIDs)
+	}
+	if queryParams.TaskID != "" {
+		query = query.Where("task_id = ?", queryParams.TaskID)
+	}
+	if queryParams.Action != "" {
+		query = query.Where("action = ?", queryParams.Action)
+	}
+	if queryParams.Status != "" {
+		query = query.Where("status = ?", queryParams.Status)
+	}
+	if queryParams.StartTimestamp != 0 {
+		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
+	}
+	if queryParams.EndTimestamp != 0 {
+		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+
+	usernames := make(map[int]string)
+	var userIDs []int
+	if err := query.Model(&Task{}).Distinct("user_id").Pluck("user_id", &userIDs).Error; err != nil {
+		return err
+	}
+	if len(userIDs) > 0 {
+		var users []struct {
+			ID       int    `gorm:"column:id"`
+			Username string `gorm:"column:username"`
+		}
+		if err := DB.Table("users").Select("id, username").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+			return err
+		}
+		for _, user := range users {
+			usernames[user.ID] = user.Username
+		}
+	}
+
+	rows, err := query.Order("id desc").Rows()
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	csvWriter := csv.NewWriter(writer)
+	header := taskCSVHeader
+	if selfView {
+		header = userTaskCSVHeader
+	}
+	if err := csvWriter.Write(header); err != nil {
+		return err
+	}
+	for rows.Next() {
+		var entry Task
+		if err := query.ScanRows(rows, &entry); err != nil {
+			return err
+		}
+		entry.Username = usernames[entry.UserId]
+		resultURL := entry.GetResultURL()
+		failReason := entry.FailReason
+		if entry.Status == TaskStatusSuccess && taskFailReasonIsLegacyResultURL(failReason) {
+			failReason = ""
+		}
+		properties, err := common.Marshal(entry.Properties)
+		if err != nil {
+			return err
+		}
+		data := string(entry.Data)
+		if selfView {
+			data = sanitizeUserExportJSON(entry.Data)
+		}
+		adminRequestID, adminRequestPath, adminPluginKey, adminPluginName, adminPluginVersion, adminPluginAuthor := "", "", "", "", "", ""
+		rootPluginKey, rootPluginVersion, rootPluginAPIVersion, rootPluginGeneration, upstreamTaskID, nodeName := "", "", "", "", "", ""
+		if !selfView && viewerRole >= common.RoleAdminUser && entry.PrivateData.Execution != nil {
+			execution := entry.PrivateData.Execution
+			adminRequestID, adminRequestPath = execution.RequestID, execution.RequestPath
+			if plugin := execution.TaskPlugin; plugin != nil {
+				adminPluginKey, adminPluginName, adminPluginVersion = plugin.Key, plugin.Name, plugin.Version
+				if plugin.Author != nil {
+					adminPluginAuthor = plugin.Author.Name
+				}
+			}
+		}
+		if !selfView && viewerRole >= common.RoleRootUser {
+			if plugin := entry.PrivateData.Execution; plugin != nil && plugin.TaskPlugin != nil {
+				rootPluginKey = plugin.TaskPlugin.Key
+				rootPluginVersion = plugin.TaskPlugin.Version
+				rootPluginAPIVersion = strconv.Itoa(plugin.TaskPlugin.APIVersion)
+				rootPluginGeneration = strconv.FormatUint(plugin.TaskPlugin.Generation, 10)
+			}
+			upstreamTaskID, nodeName = entry.PrivateData.UpstreamTaskID, entry.PrivateData.NodeName
+		}
+
+		record := []string{
+			strconv.FormatInt(entry.ID, 10), strconv.FormatInt(entry.CreatedAt, 10), strconv.FormatInt(entry.UpdatedAt, 10),
+			entry.TaskID, string(entry.Platform), strconv.Itoa(entry.UserId), entry.Username, entry.Group,
+		}
+		if selfView {
+			record = append(record, strconv.Itoa(entry.Quota), entry.Action, string(entry.Status), failReason, resultURL,
+				strconv.FormatInt(entry.SubmitTime, 10), strconv.FormatInt(entry.StartTime, 10), strconv.FormatInt(entry.FinishTime, 10),
+				entry.Progress, string(properties), data,
+			)
+		} else {
+			record = append(record, strconv.Itoa(entry.ChannelId), strconv.Itoa(entry.Quota), entry.Action, string(entry.Status), failReason, resultURL,
+				strconv.FormatInt(entry.SubmitTime, 10), strconv.FormatInt(entry.StartTime, 10), strconv.FormatInt(entry.FinishTime, 10),
+				entry.Progress, string(properties), data, adminRequestID, adminRequestPath, adminPluginKey, adminPluginName,
+				adminPluginVersion, adminPluginAuthor, rootPluginKey, rootPluginVersion, rootPluginAPIVersion,
+				rootPluginGeneration, upstreamTaskID, nodeName,
+			)
+		}
+		if err := csvWriter.Write(record); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	csvWriter.Flush()
+	return csvWriter.Error()
 }
 
 func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) *Task {

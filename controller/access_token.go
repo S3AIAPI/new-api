@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -69,38 +71,11 @@ func GetAuditLogs(c *gin.Context) {
 		common.ApiErrorMsg(c, "Invalid audit pagination")
 		return
 	}
-	filter := model.AuditLogFilter{Username: c.Query("username"), Category: c.Query("category"), TokenRef: c.Query("token_ref"), ExcludeTokenRef: c.Query("exclude_token_ref"), RequestId: c.Query("request_id")}
 	viewerRole := c.GetInt("role")
-	if c.FullPath() == "/api/audit/self" {
-		filter.UserId = c.GetInt("id")
-		filter.Username = ""
-		filter.SelfView = true
-	}
-	if !model.ValidAuditCategory(filter.Category) || !model.ValidTokenFingerprint(filter.TokenRef) || !model.ValidTokenFingerprint(filter.ExcludeTokenRef) {
-		common.ApiErrorMsg(c, "Invalid audit filters")
+	filter, err := parseAuditLogFilter(c, c.FullPath() == "/api/audit/self")
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
 		return
-	}
-	for name, target := range map[string]*int64{"start_timestamp": &filter.StartTimestamp, "end_timestamp": &filter.EndTimestamp} {
-		if raw := c.Query(name); raw != "" {
-			parsed, err := strconv.ParseInt(raw, 10, 64)
-			if err != nil || parsed < 0 {
-				common.ApiErrorMsg(c, "Invalid audit time range")
-				return
-			}
-			*target = parsed
-		}
-	}
-	if filter.EndTimestamp > 0 && filter.EndTimestamp < filter.StartTimestamp {
-		common.ApiErrorMsg(c, "Invalid audit time range")
-		return
-	}
-	if raw := c.Query("success"); raw != "" {
-		if raw != "true" && raw != "false" {
-			common.ApiErrorMsg(c, "Invalid audit result")
-			return
-		}
-		success := raw == "true"
-		filter.Success = &success
 	}
 	logs, total, err := model.GetAuditLogs(filter, page.GetStartIdx(), page.GetPageSize(), viewerRole)
 	if err != nil {
@@ -110,4 +85,54 @@ func GetAuditLogs(c *gin.Context) {
 	page.SetItems(logs)
 	page.SetTotal(int(total))
 	common.ApiSuccess(c, page)
+}
+
+func parseAuditLogFilter(c *gin.Context, selfView bool) (model.AuditLogFilter, error) {
+	filter := model.AuditLogFilter{
+		Username:        c.Query("username"),
+		Category:        c.Query("category"),
+		TokenRef:        c.Query("token_ref"),
+		ExcludeTokenRef: c.Query("exclude_token_ref"),
+		RequestId:       c.Query("request_id"),
+		SelfView:        selfView,
+	}
+	if selfView {
+		filter.UserId = c.GetInt("id")
+		filter.Username = ""
+	}
+	if !model.ValidAuditCategory(filter.Category) || !model.ValidTokenFingerprint(filter.TokenRef) || !model.ValidTokenFingerprint(filter.ExcludeTokenRef) {
+		return model.AuditLogFilter{}, fmt.Errorf("Invalid audit filters")
+	}
+	for name, target := range map[string]*int64{"start_timestamp": &filter.StartTimestamp, "end_timestamp": &filter.EndTimestamp} {
+		if raw := c.Query(name); raw != "" {
+			parsed, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || parsed < 0 {
+				return model.AuditLogFilter{}, fmt.Errorf("Invalid audit time range")
+			}
+			*target = parsed
+		}
+	}
+	if filter.EndTimestamp > 0 && filter.EndTimestamp < filter.StartTimestamp {
+		return model.AuditLogFilter{}, fmt.Errorf("Invalid audit time range")
+	}
+	if raw := c.Query("success"); raw != "" {
+		if raw != "true" && raw != "false" {
+			return model.AuditLogFilter{}, fmt.Errorf("Invalid audit result")
+		}
+		success := raw == "true"
+		filter.Success = &success
+	}
+	return filter, nil
+}
+
+func ExportAuditLogsCSV(c *gin.Context) {
+	selfView := c.FullPath() == "/api/audit/self/export"
+	filter, err := parseAuditLogFilter(c, selfView)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	writeCSVDownload(c, "audit-logs", func(writer io.Writer) error {
+		return model.WriteAuditLogsCSV(writer, filter, c.GetInt("role"))
+	})
 }

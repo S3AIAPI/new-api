@@ -86,6 +86,22 @@ export const getUserLogStats = (
   params: Omit<GetLogStatsParams, 'username' | 'channel'> = {}
 ) => fetchLogStats('/api/log', params, false)
 
+export async function exportLogsCsv(
+  params: Record<string, unknown>,
+  isAdmin: boolean
+): Promise<Blob> {
+  const response = await api.get<Blob>(
+    isAdmin ? '/api/log/export' : '/api/log/self/export',
+    {
+      params,
+      responseType: 'blob',
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    }
+  )
+  return response.data
+}
+
 export async function getUserInfo(
   userId: number
 ): Promise<{ success: boolean; message?: string; data?: UserInfo }> {
@@ -103,6 +119,22 @@ export const getAllMidjourneyLogs = (params: GetMidjourneyLogsParams) =>
 export const getUserMidjourneyLogs = (params: GetMidjourneyLogsParams) =>
   fetchLogs('/api/mj', params, false)
 
+export async function exportMidjourneyLogsCsv(
+  params: Omit<GetMidjourneyLogsParams, 'p' | 'page_size'>,
+  isAdmin: boolean
+): Promise<Blob> {
+  const response = await api.get<Blob>(
+    isAdmin ? '/api/mj/export' : '/api/mj/self/export',
+    {
+      params,
+      responseType: 'blob',
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    }
+  )
+  return response.data
+}
+
 // ============================================================================
 // Task Logs API
 // ============================================================================
@@ -112,6 +144,22 @@ export const getAllTaskLogs = (params: GetTaskLogsParams) =>
 
 export const getUserTaskLogs = (params: GetTaskLogsParams) =>
   fetchLogs('/api/task', params, false)
+
+export async function exportTaskLogsCsv(
+  params: Omit<GetTaskLogsParams, 'p' | 'page_size'>,
+  isAdmin: boolean
+): Promise<Blob> {
+  const response = await api.get<Blob>(
+    isAdmin ? '/api/task/export' : '/api/task/self/export',
+    {
+      params,
+      responseType: 'blob',
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    }
+  )
+  return response.data
+}
 
 const taskArtifactRequestConfig = {
   skipBusinessError: true,

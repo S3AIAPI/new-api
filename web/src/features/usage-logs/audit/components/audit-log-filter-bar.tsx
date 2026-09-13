@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { Table } from '@tanstack/react-table'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Combobox } from '@/components/ui/combobox'
@@ -62,6 +63,7 @@ export function AuditLogFilterBar(props: {
   isFetching: boolean
   onSearch: () => void
   onReset: () => void
+  actionStart?: ReactNode
 }) {
   const { t } = useTranslation()
   const dateFilter = (
@@ -201,6 +203,7 @@ export function AuditLogFilterBar(props: {
   return (
     <LogsFilterToolbar
       table={props.table}
+      actionStart={props.actionStart}
       primaryFilters={
         <>
           {dateFilter}

@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -392,6 +393,28 @@ func GetUserTask(c *gin.Context) {
 	pageInfo.SetTotal(int(model.TaskCountAllUserTask(userID, queryParams)))
 	pageInfo.SetItems(tasksToDto(items, false, common.RoleCommonUser))
 	common.ApiSuccess(c, pageInfo)
+}
+
+func ExportTaskCSV(c *gin.Context) {
+	selfView := c.FullPath() == "/api/task/self/export"
+	userID := 0
+	if selfView {
+		userID = c.GetInt("id")
+	}
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	queryParams := model.SyncTaskQueryParams{
+		Platform:       constant.TaskPlatform(c.Query("platform")),
+		TaskID:         c.Query("task_id"),
+		Status:         c.Query("status"),
+		Action:         c.Query("action"),
+		StartTimestamp: startTimestamp,
+		EndTimestamp:   endTimestamp,
+		ChannelID:      c.Query("channel_id"),
+	}
+	writeCSVDownload(c, "task-logs", func(writer io.Writer) error {
+		return model.WriteTaskCSV(writer, userID, queryParams, c.GetInt("role"), selfView)
+	})
 }
 
 func tasksToDto(tasks []*model.Task, fillUser bool, viewerRole int) []*dto.TaskDto {

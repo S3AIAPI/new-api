@@ -23,6 +23,8 @@ func TestValidatePublicOption(t *testing.T) {
 		{name: "reject unsafe logo", key: "Logo", value: "data:image/svg+xml,test", wantErr: true},
 		{name: "valid preset", key: "console_setting.default_theme_preset", value: "anthropic"},
 		{name: "invalid preset", key: "console_setting.default_theme_preset", value: "unknown", wantErr: true},
+		{name: "force light theme", key: "console_setting.default_theme_override", value: "light"},
+		{name: "reject system as theme override", key: "console_setting.default_theme_override", value: "system", wantErr: true},
 		{name: "three-column card page", key: "console_setting.model_square_card_page_size", value: "18"},
 		{name: "reject incomplete card row", key: "console_setting.model_square_card_page_size", value: "20", wantErr: true},
 		{name: "table page range", key: "console_setting.model_square_table_page_size", value: "100"},
@@ -48,6 +50,7 @@ func TestPublicSettingsDefaults(t *testing.T) {
 	homepage := GetHomepageSetting()
 
 	assert.Equal(t, "system", appearance.DefaultTheme)
+	assert.Equal(t, "none", appearance.DefaultThemeOverride)
 	assert.Equal(t, 40, appearance.BackgroundBlurOpacity)
 	assert.Equal(t, "card", appearance.ModelSquareDefaultView)
 	assert.Equal(t, 18, appearance.ModelSquareCardPageSize)

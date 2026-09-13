@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
+import { Download } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -27,7 +28,13 @@ import { Button } from '@/components/ui/button'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { getAuditLogs, type AuditFilters, type AuditLog } from '../api'
+import { LogsExportDialog } from '../../components/logs-export-dialog'
+import {
+  exportAuditLogsCsv,
+  getAuditLogs,
+  type AuditFilters,
+  type AuditLog,
+} from '../api'
 import { useAuditLogColumns } from './audit-log-columns'
 import { AuditLogFilterBar } from './audit-log-filter-bar'
 
@@ -43,6 +50,7 @@ export function AuditLogViewer(props: {
   const userId = useAuthStore((state) => state.auth.user?.id)
   const [filters, setFilters] = useState<AuditFilters>({ p: 1, page_size: 20 })
   const [tokenScope, setTokenScope] = useState('all')
+  const [exportOpen, setExportOpen] = useState(false)
   const params = { ...filters }
   if (props.accessOnly) params.category = 'access_token'
   if (tokenScope === 'current') params.token_ref = props.currentTokenRef
@@ -143,6 +151,19 @@ export function AuditLogViewer(props: {
                 setTokenScope('all')
                 setFilters({ p: 1, page_size: filters.page_size })
               }}
+              actionStart={
+                <Button
+                  type='button'
+                  variant='outline'
+                  onClick={() => setExportOpen(true)}
+                  disabled={
+                    query.isFetching || exportOpen || invalidRange || !canQuery
+                  }
+                >
+                  <Download />
+                  {t('Export CSV')}
+                </Button>
+              }
             />
             {invalidRange && (
               <Alert variant='destructive'>
@@ -168,6 +189,14 @@ export function AuditLogViewer(props: {
           </div>
         }
       />
+      {exportOpen && (
+        <LogsExportDialog
+          open
+          fileName={`audit-logs-${Date.now()}.csv`}
+          request={() => exportAuditLogsCsv(props.scope, params)}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
     </div>
   )
 }

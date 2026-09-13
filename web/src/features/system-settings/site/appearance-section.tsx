@@ -56,6 +56,7 @@ const appearanceSchema = z.object({
   backgroundImage: z.string(),
   backgroundBlurOpacity: z.coerce.number().min(0).max(100).default(40),
   defaultTheme: z.enum(['system', 'light', 'dark']),
+  defaultThemeOverride: z.enum(['none', 'light', 'dark']),
   defaultThemePreset: z.string(),
   defaultThemeFont: z.enum(['default', 'sans', 'serif']),
   defaultThemeRadius: z.enum(['default', 'none', 'sm', 'md', 'lg', 'xl']),
@@ -75,6 +76,7 @@ const OPTION_KEYS: Record<keyof AppearanceFormValues, string> = {
   backgroundImage: 'console_setting.background_image',
   backgroundBlurOpacity: 'console_setting.background_blur_opacity',
   defaultTheme: 'console_setting.default_theme',
+  defaultThemeOverride: 'console_setting.default_theme_override',
   defaultThemePreset: 'console_setting.default_theme_preset',
   defaultThemeFont: 'console_setting.default_theme_font',
   defaultThemeRadius: 'console_setting.default_theme_radius',
@@ -143,6 +145,15 @@ export function AppearanceSection({ defaultValues }: AppearanceSectionProps) {
         item.value,
         `preset.${item.value}`,
       ]),
+    },
+    {
+      name: 'defaultThemeOverride',
+      label: 'Theme override',
+      options: [
+        ['none', 'No override'],
+        ['light', 'Force light mode'],
+        ['dark', 'Force dark mode'],
+      ],
     },
     {
       name: 'defaultThemeFont',

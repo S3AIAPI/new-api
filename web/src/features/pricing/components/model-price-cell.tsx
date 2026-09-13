@@ -28,6 +28,7 @@ import {
   getDynamicDisplayGroupRatio,
   getDynamicPriceUnitLabelKey,
   getDynamicPricingSummary,
+  isDynamicPricingFree,
   isUnconfiguredTaskUsageModel,
 } from '../lib/dynamic-price'
 import { isTokenBasedModel } from '../lib/model-helpers'
@@ -96,6 +97,18 @@ export function ModelPriceCell(props: {
   })
 
   if (dynamic) {
+    if (
+      isDynamicPricingFree(
+        dynamic,
+        getDynamicDisplayGroupRatio(props.model, options.selectedGroup)
+      )
+    ) {
+      return (
+        <span className='font-mono text-sm font-semibold tabular-nums'>
+          {t('Free')}
+        </span>
+      )
+    }
     if (dynamic.isSpecialExpression) {
       return (
         <span className='block max-w-full min-w-0'>

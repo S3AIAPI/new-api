@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"net/http"
 
 	"github.com/QuantumNous/new-api/common"
@@ -8,6 +9,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -157,6 +159,16 @@ func refreshTieredBillingGroup(relayInfo *relaycommon.RelayInfo) (*billingexpr.B
 	}
 	snap.GroupRatio = groupRatio
 	snap.EstimatedQuotaAfterGroup = estimatedQuota
+	billingFree := groupRatio == 0
+	for _, price := range snap.FreePriceCandidates {
+		adjustedPrice := price * groupRatio
+		billingFree = billingFree || adjustedPrice >= 0 && !math.IsNaN(adjustedPrice) && !math.IsInf(adjustedPrice, 0) && adjustedPrice < common.FreeModelPriceThresholdUSD
+	}
+	relayInfo.PriceData.BillingFree = billingFree
+	relayInfo.PriceData.FreeModel = billingFree && !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume
+	if snap.GroupRatio == 0 || relayInfo.PriceData.FreeModel {
+		snap.EstimatedQuotaAfterGroup = 0
+	}
 	return snap, nil
 }
 
@@ -177,7 +189,7 @@ func PrepareTieredBillingForSelectedGroup(c *gin.Context, relayInfo *relaycommon
 	if snap == nil {
 		return nil
 	}
-	if snap.GroupRatio == 0 {
+	if relayInfo.PriceData.FreeModel {
 		// Paid-to-free keeps FreeModel as-is: FreeModel means "pre-consume was
 		// skipped", which is not true once a session exists, and settlement
 		// already yields 0 for a zero group ratio.
@@ -191,8 +203,10 @@ func PrepareTieredBillingForSelectedGroup(c *gin.Context, relayInfo *relaycommon
 	if relayInfo.Billing == nil {
 		return PreConsumeBilling(c, snap.EstimatedQuotaAfterGroup, relayInfo)
 	}
-	if err := relayInfo.Billing.Reserve(snap.EstimatedQuotaAfterGroup); err != nil {
-		return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+	if snap.EstimatedQuotaAfterGroup > relayInfo.Billing.GetPreConsumedQuota() {
+		if err := relayInfo.Billing.Reserve(snap.EstimatedQuotaAfterGroup); err != nil {
+			return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+		}
 	}
 	relayInfo.FinalPreConsumedQuota = relayInfo.Billing.GetPreConsumedQuota()
 	return nil
@@ -231,6 +245,10 @@ func TryTieredSettle(relayInfo *relaycommon.RelayInfo, params billingexpr.TokenP
 	// consume log records it under admin_info, regardless of which caller
 	// (text, audio, WSS) consumes the returned quota. First non-nil wins.
 	noteQuotaClamp(relayInfo, tr.Clamp)
+	if relayInfo.PriceData.BillingFree {
+		tr.ActualQuotaAfterGroup = 0
+		return true, 0, &tr
+	}
 
 	return true, tr.ActualQuotaAfterGroup, &tr
 }

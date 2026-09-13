@@ -60,6 +60,8 @@ export interface PublicHeaderProps {
   showAuthButtons?: boolean
   showNotifications?: boolean
   floating?: boolean
+  /** Keep a floating header in its final shape on first paint. */
+  animateFloatingEntrance?: boolean
   className?: string
 }
 
@@ -74,6 +76,7 @@ export function PublicHeader(props: PublicHeaderProps) {
     showAuthButtons = true,
     showNotifications = true,
     floating = false,
+    animateFloatingEntrance = true,
   } = props
 
   const { t } = useTranslation()
@@ -133,15 +136,15 @@ export function PublicHeader(props: PublicHeaderProps) {
   }, [])
 
   useEffect(() => {
-    if (!floating) {
-      setFloatingEntered(false)
+    if (!floating || !animateFloatingEntrance) {
+      setFloatingEntered(floating)
       return
     }
 
     setFloatingEntered(false)
     const frame = window.requestAnimationFrame(() => setFloatingEntered(true))
     return () => window.cancelAnimationFrame(frame)
-  }, [floating])
+  }, [floating, animateFloatingEntrance])
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : ''
@@ -180,7 +183,8 @@ export function PublicHeader(props: PublicHeaderProps) {
     navigate({ to: '/sign-in', search: { redirect } })
   }, [authPromptTarget?.href, navigate])
 
-  const floatingActive = floating && floatingEntered
+  const floatingActive =
+    floating && (floatingEntered || !animateFloatingEntrance)
   let headerContainerClass = 'max-w-7xl px-4 pt-0 md:px-6'
   if (floating) {
     headerContainerClass = floatingActive

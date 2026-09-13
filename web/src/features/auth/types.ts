@@ -133,6 +133,9 @@ export interface SystemStatus {
     login_captcha_difficulty?: number
     checkin_captcha_difficulty?: number
     checkin_min_user_quota?: number
+    checkin_min_used_quota?: number
+    checkin_daily_user_limit?: number
+    checkin_daily_quota_limit?: number
     email_verification?: boolean
     self_use_mode_enabled?: boolean
     display_in_currency?: boolean
@@ -197,6 +200,9 @@ export interface SystemStatus {
   login_captcha_difficulty?: number
   checkin_captcha_difficulty?: number
   checkin_min_user_quota?: number
+  checkin_min_used_quota?: number
+  checkin_daily_user_limit?: number
+  checkin_daily_quota_limit?: number
   email_verification?: boolean
   self_use_mode_enabled?: boolean
   display_in_currency?: boolean

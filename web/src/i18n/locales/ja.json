@@ -7138,6 +7138,26 @@
     "Recent status for {{name}}": "{{name}} の最近のステータス",
     "Set up two-factor authentication before changing this setting.": "この設定を変更する前に、2要素認証を設定してください。",
     "Enter a current two-factor code to confirm this change.": "この変更を確認するには、現在の2要素認証コードを入力してください。",
-    "Require a two-factor code when signing in": "ログイン時に2要素認証コードを要求する"
+    "Require a two-factor code when signing in": "ログイン時に2要素認証コードを要求する",
+    "Balance must be greater than {{quota}}.": "残高は {{quota}} より大きくする必要があります。",
+    "Check-in spending threshold": "チェックインの利用額しきい値",
+    "Daily check-in quota limit": "1日のチェックイン付与上限",
+    "Daily check-in user limit": "1日のチェックイン人数上限",
+    "Export CSV": "CSVをエクスポート",
+    "Export progress": "エクスポートの進行状況",
+    "Exporting all matching records...": "一致するすべての記録をエクスポート中…",
+    "Failed to export logs": "ログのエクスポートに失敗しました",
+    "Force dark mode": "ダークモードを強制",
+    "Force light mode": "ライトモードを強制",
+    "No override": "上書きしない",
+    "Not eligible": "条件を満たしていません",
+    "Set to 0 for unlimited daily check-in rewards.": "0にすると、1日のチェックイン報酬を無制限にします。",
+    "Set to 0 for unlimited daily check-in users.": "0にすると、1日のチェックイン人数を無制限にします。",
+    "Set to 0 to disable. Users must have spent at least this quota amount.": "0にすると無効になります。ユーザーの累計利用額がこのクォータ以上である必要があります。",
+    "The server is preparing your CSV file.": "サーバーがCSVファイルを準備しています。",
+    "Theme override": "テーマの上書き",
+    "Today awarded {{amount}}/{{limit}} quota": "本日の付与済みクォータ {{amount}}/{{limit}}",
+    "Today checked in {{count}}/{{limit}} users": "本日のチェックイン {{count}}/{{limit}} 人",
+    "Total spending must reach {{quota}}.": "累計利用額が {{quota}} に達している必要があります。"
   }
 }

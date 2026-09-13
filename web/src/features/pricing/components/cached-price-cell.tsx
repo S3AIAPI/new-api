@@ -26,6 +26,7 @@ import { useBillingTime } from '../hooks/use-billing-time'
 import {
   getDynamicDisplayGroupRatio,
   getDynamicPricingSummary,
+  isDynamicPricingFree,
   isUnconfiguredTaskUsageModel,
 } from '../lib/dynamic-price'
 import { isTokenBasedModel } from '../lib/model-helpers'
@@ -76,6 +77,14 @@ export function CachedPriceCell(props: {
   )
 
   if (dynamicSummary) {
+    if (
+      isDynamicPricingFree(
+        dynamicSummary,
+        getDynamicDisplayGroupRatio(model, selectedGroup)
+      )
+    ) {
+      return <span className='font-mono text-sm tabular-nums'>{t('Free')}</span>
+    }
     if (dynamicSummary.isSpecialExpression) {
       return (
         <span className='text-muted-foreground/50 text-xs'>
@@ -97,7 +106,7 @@ export function CachedPriceCell(props: {
         {cacheEntries.map((entry) => (
           <div
             key={entry.field}
-            className='flex flex-wrap items-baseline gap-x-1'
+            className='flex flex-nowrap items-baseline gap-x-1'
           >
             {(cacheEntries.length > 1 || entry.field === 'imageCachePrice') && (
               <span className='text-muted-foreground text-xs'>

@@ -41,7 +41,7 @@ import { ScrollArea } from './ui/scroll-area'
 export function CommandMenu() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { setTheme } = useTheme()
+  const { isForced, setTheme } = useTheme()
   const { open, setOpen } = useSearch()
   const { pathname } = useLocation()
   const sidebarData = useSidebarData()
@@ -103,14 +103,21 @@ export function CommandMenu() {
             ))}
             <CommandSeparator />
             <CommandGroup heading='Theme'>
-              <CommandItem onSelect={() => runCommand(() => setTheme('light'))}>
+              <CommandItem
+                disabled={isForced}
+                onSelect={() => runCommand(() => setTheme('light'))}
+              >
                 <Sun /> <span>{t('Light')}</span>
               </CommandItem>
-              <CommandItem onSelect={() => runCommand(() => setTheme('dark'))}>
+              <CommandItem
+                disabled={isForced}
+                onSelect={() => runCommand(() => setTheme('dark'))}
+              >
                 <Moon className='scale-90' />
                 <span>{t('Dark')}</span>
               </CommandItem>
               <CommandItem
+                disabled={isForced}
                 onSelect={() => runCommand(() => setTheme('system'))}
               >
                 <Laptop />

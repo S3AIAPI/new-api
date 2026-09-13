@@ -7138,6 +7138,26 @@
     "Recent status for {{name}}": "Recent status for {{name}}",
     "Set up two-factor authentication before changing this setting.": "Set up two-factor authentication before changing this setting.",
     "Enter a current two-factor code to confirm this change.": "Enter a current two-factor code to confirm this change.",
-    "Require a two-factor code when signing in": "Require a two-factor code when signing in"
+    "Require a two-factor code when signing in": "Require a two-factor code when signing in",
+    "Balance must be greater than {{quota}}.": "Balance must be greater than {{quota}}.",
+    "Check-in spending threshold": "Check-in spending threshold",
+    "Daily check-in quota limit": "Daily check-in quota limit",
+    "Daily check-in user limit": "Daily check-in user limit",
+    "Export CSV": "Export CSV",
+    "Export progress": "Export progress",
+    "Exporting all matching records...": "Exporting all matching records...",
+    "Failed to export logs": "Failed to export logs",
+    "Force dark mode": "Force dark mode",
+    "Force light mode": "Force light mode",
+    "No override": "No override",
+    "Not eligible": "Not eligible",
+    "Set to 0 for unlimited daily check-in rewards.": "Set to 0 for unlimited daily check-in rewards.",
+    "Set to 0 for unlimited daily check-in users.": "Set to 0 for unlimited daily check-in users.",
+    "Set to 0 to disable. Users must have spent at least this quota amount.": "Set to 0 to disable. Users must have spent at least this quota amount.",
+    "The server is preparing your CSV file.": "The server is preparing your CSV file.",
+    "Theme override": "Theme override",
+    "Today awarded {{amount}}/{{limit}} quota": "Today awarded {{amount}}/{{limit}} quota",
+    "Today checked in {{count}}/{{limit}} users": "Today checked in {{count}}/{{limit}} users",
+    "Total spending must reach {{quota}}.": "Total spending must reach {{quota}}."
   }
 }

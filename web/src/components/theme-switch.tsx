@@ -32,7 +32,7 @@ import { cn } from '@/lib/utils'
 
 export function ThemeSwitch() {
   const { t } = useTranslation()
-  const { theme, setTheme } = useTheme()
+  const { isForced, theme, setTheme } = useTheme()
 
   /* Update theme-color meta tag
    * when theme is updated */
@@ -52,21 +52,21 @@ export function ThemeSwitch() {
         <span className='sr-only'>{t('Toggle theme')}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end'>
-        <DropdownMenuItem onClick={() => setTheme('light')}>
+        <DropdownMenuItem disabled={isForced} onClick={() => setTheme('light')}>
           {t('Light')}{' '}
           <Check
             size={14}
             className={cn('ms-auto', theme !== 'light' && 'hidden')}
           />
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('dark')}>
+        <DropdownMenuItem disabled={isForced} onClick={() => setTheme('dark')}>
           {t('Dark')}
           <Check
             size={14}
             className={cn('ms-auto', theme !== 'dark' && 'hidden')}
           />
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('system')}>
+        <DropdownMenuItem disabled={isForced} onClick={() => setTheme('system')}>
           {t('System')}
           <Check
             size={14}

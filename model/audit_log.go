@@ -1,10 +1,15 @@
 package model
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"strconv"
 	"strings"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -136,7 +141,7 @@ func RecordAuditLog(c *gin.Context, entry AuditLog) {
 	}
 }
 
-func GetAuditLogs(filter AuditLogFilter, start, limit, viewerRole int) ([]*AuditLog, int64, error) {
+func buildAuditLogQuery(filter AuditLogFilter, viewerRole int) *gorm.DB {
 	query := LOG_DB.Model(&AuditLog{})
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		// Decode native JSON through database/sql as text for AuditOther.Scan.
@@ -176,6 +181,153 @@ func GetAuditLogs(filter AuditLogFilter, start, limit, viewerRole int) ([]*Audit
 	if filter.Success != nil {
 		query = query.Where("success = ?", *filter.Success)
 	}
+	return query
+}
+
+func auditLogVisibility(filter AuditLogFilter, viewerRole int) logOtherVisibility {
+	visibility := logOtherVisibilityUser
+	if !filter.SelfView && viewerRole >= common.RoleRootUser {
+		return logOtherVisibilityRoot
+	}
+	if !filter.SelfView && viewerRole >= common.RoleAdminUser {
+		return logOtherVisibilityAdmin
+	}
+	return visibility
+}
+
+func projectAuditLogOther(entry *AuditLog, visibility logOtherVisibility) {
+	if visibility != logOtherVisibilityRoot {
+		entry.Other.RootInfo = nil
+	}
+	if visibility == logOtherVisibilityUser {
+		entry.Other.AdminInfo = nil
+		entry.Other.AuditInfo = nil
+		if entry.Other.Op != nil {
+			entry.Other.Op.Params = redactAuditFields(entry.Other.Op.Params)
+		}
+	}
+}
+
+func isPrivateAuditField(key string) bool {
+	return isUserHiddenLogOtherKey(key)
+}
+
+func redactAuditFields(fields AuditFields) AuditFields {
+	redacted, changed := redactAuditFieldsValue(fields)
+	if !changed {
+		return fields
+	}
+	return redacted
+}
+
+func redactAuditFieldsValue(fields AuditFields) (AuditFields, bool) {
+	if len(fields) == 0 {
+		return fields, false
+	}
+	redacted := make(AuditFields, len(fields))
+	changed := false
+	for key, value := range fields {
+		if isPrivateAuditField(key) {
+			changed = true
+			continue
+		}
+		if next, valueChanged := redactAuditValue(value); valueChanged {
+			redacted[key] = next
+			changed = true
+		} else {
+			redacted[key] = value
+		}
+	}
+	return redacted, changed
+}
+
+func redactAuditValue(value any) (any, bool) {
+	switch typed := value.(type) {
+	case AuditFields:
+		return redactAuditFieldsValue(typed)
+	case map[string]any:
+		redacted, changed := redactAuditFieldsValue(AuditFields(typed))
+		if !changed {
+			return typed, false
+		}
+		return map[string]any(redacted), true
+	case []any:
+		redacted := make([]any, len(typed))
+		changed := false
+		for index, item := range typed {
+			if next, itemChanged := redactAuditValue(item); itemChanged {
+				redacted[index] = next
+				changed = true
+			} else {
+				redacted[index] = item
+			}
+		}
+		return redacted, changed
+	case json.RawMessage:
+		return redactAuditJSON(typed)
+	default:
+		return value, false
+	}
+}
+
+func redactAuditJSON(value json.RawMessage) (json.RawMessage, bool) {
+	trimmed := bytes.TrimSpace(value)
+	if len(trimmed) == 0 {
+		return value, false
+	}
+	switch trimmed[0] {
+	case '{':
+		var object map[string]json.RawMessage
+		if err := common.Unmarshal(trimmed, &object); err != nil {
+			return value, false
+		}
+		changed := false
+		for key, item := range object {
+			if isPrivateAuditField(key) {
+				delete(object, key)
+				changed = true
+				continue
+			}
+			if next, itemChanged := redactAuditJSON(item); itemChanged {
+				object[key] = next
+				changed = true
+			}
+		}
+		if !changed {
+			return value, false
+		}
+		encoded, err := common.Marshal(object)
+		if err != nil {
+			return value, false
+		}
+		return encoded, true
+	case '[':
+		var array []json.RawMessage
+		if err := common.Unmarshal(trimmed, &array); err != nil {
+			return value, false
+		}
+		changed := false
+		for index, item := range array {
+			if next, itemChanged := redactAuditJSON(item); itemChanged {
+				array[index] = next
+				changed = true
+			}
+		}
+		if !changed {
+			return value, false
+		}
+		encoded, err := common.Marshal(array)
+		if err != nil {
+			return value, false
+		}
+		return encoded, true
+	default:
+		return value, false
+	}
+}
+
+func GetAuditLogs(filter AuditLogFilter, start, limit, viewerRole int) ([]*AuditLog, int64, error) {
+	query := buildAuditLogQuery(filter, viewerRole)
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -184,22 +336,58 @@ func GetAuditLogs(filter AuditLogFilter, start, limit, viewerRole int) ([]*Audit
 	if err := query.Order("created_at DESC").Order("event_id DESC").Offset(start).Limit(limit).Find(&logs).Error; err != nil {
 		return nil, 0, err
 	}
-	visibility := logOtherVisibilityUser
-	if !filter.SelfView && viewerRole >= common.RoleRootUser {
-		visibility = logOtherVisibilityRoot
-	} else if !filter.SelfView && viewerRole >= common.RoleAdminUser {
-		visibility = logOtherVisibilityAdmin
-	}
+	visibility := auditLogVisibility(filter, viewerRole)
 	for _, entry := range logs {
-		if visibility != logOtherVisibilityRoot {
-			entry.Other.RootInfo = nil
-		}
-		if visibility == logOtherVisibilityUser {
-			entry.Other.AdminInfo = nil
-			entry.Other.AuditInfo = nil
-		}
+		projectAuditLogOther(entry, visibility)
 	}
 	return logs, total, nil
+}
+
+var auditCSVHeader = []string{
+	"event_id", "user_id", "username", "actor_role", "created_at", "category", "action",
+	"token_ref", "auth_method", "ip", "user_agent", "method", "route", "status", "success",
+	"request_id", "content", "other",
+}
+
+// WriteAuditLogsCSV streams matching audit events with the same visibility
+// projection as the paginated API.
+func WriteAuditLogsCSV(writer io.Writer, filter AuditLogFilter, viewerRole int) error {
+	query := buildAuditLogQuery(filter, viewerRole)
+	rows, err := query.Order("created_at DESC").Order("event_id DESC").Rows()
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	csvWriter := csv.NewWriter(writer)
+	if err := csvWriter.Write(auditCSVHeader); err != nil {
+		return err
+	}
+	visibility := auditLogVisibility(filter, viewerRole)
+	for rows.Next() {
+		var entry AuditLog
+		if err := query.ScanRows(rows, &entry); err != nil {
+			return err
+		}
+		projectAuditLogOther(&entry, visibility)
+		other, err := common.Marshal(entry.Other)
+		if err != nil {
+			return err
+		}
+		if err := csvWriter.Write([]string{
+			entry.EventId, strconv.Itoa(entry.UserId), entry.Username, strconv.Itoa(entry.ActorRole),
+			strconv.FormatInt(entry.CreatedAt, 10), entry.Category, entry.Action, entry.TokenRef,
+			entry.AuthMethod, entry.Ip, entry.UserAgent, entry.Method, entry.Route, strconv.Itoa(entry.Status),
+			strconv.FormatBool(entry.Success), entry.RequestId, entry.Content, string(other),
+		}); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	csvWriter.Flush()
+	return csvWriter.Error()
 }
 
 type UserAccessTokenStatus struct {

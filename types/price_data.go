@@ -15,6 +15,7 @@ type GroupRatioInfo struct {
 
 type PriceData struct {
 	FreeModel            bool
+	BillingFree          bool
 	ModelPrice           float64
 	ModelRatio           float64
 	CompletionRatio      float64

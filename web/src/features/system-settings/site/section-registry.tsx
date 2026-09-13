@@ -81,6 +81,8 @@ const SITE_SECTIONS = [
           backgroundBlurOpacity:
             settings['console_setting.background_blur_opacity'],
           defaultTheme: settings['console_setting.default_theme'],
+          defaultThemeOverride:
+            settings['console_setting.default_theme_override'],
           defaultThemePreset: settings['console_setting.default_theme_preset'],
           defaultThemeFont: settings['console_setting.default_theme_font'],
           defaultThemeRadius: settings['console_setting.default_theme_radius'],

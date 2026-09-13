@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils'
 
 export function ThemeQuickSwitcher() {
   const { t } = useTranslation()
-  const { theme, setTheme } = useTheme()
+  const { isForced, theme, setTheme } = useTheme()
 
   return (
     <div className='px-2 pt-1.5 pb-1'>
@@ -48,6 +48,7 @@ export function ThemeQuickSwitcher() {
             role='radio'
             aria-label={t('System')}
             aria-checked={theme === 'system'}
+            disabled={isForced}
             onClick={() => setTheme('system')}
             className={cn(
               'relative size-7',
@@ -75,6 +76,7 @@ export function ThemeQuickSwitcher() {
             role='radio'
             aria-label={t('Light')}
             aria-checked={theme === 'light'}
+            disabled={isForced}
             onClick={() => setTheme('light')}
             className={cn(
               'relative size-7',
@@ -102,6 +104,7 @@ export function ThemeQuickSwitcher() {
             role='radio'
             aria-label={t('Dark')}
             aria-checked={theme === 'dark'}
+            disabled={isForced}
             onClick={() => setTheme('dark')}
             className={cn(
               'relative size-7',

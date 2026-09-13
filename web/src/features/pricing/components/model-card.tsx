@@ -34,6 +34,7 @@ import {
   getDynamicDisplayGroupRatio,
   getDynamicPriceUnitLabelKey,
   getDynamicPricingSummary,
+  isDynamicPricingFree,
   isUnconfiguredTaskUsageModel,
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
@@ -106,8 +107,20 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [props.model, dynamicPriceOptions, currency]
   )
+  const dynamicIsFree =
+    dynamicSummary != null &&
+    isDynamicPricingFree(
+      dynamicSummary,
+      getDynamicDisplayGroupRatio(props.model, props.selectedGroup)
+    )
   let priceSummary: ReactNode
-  if (dynamicSummary) {
+  if (dynamicSummary && dynamicIsFree) {
+    priceSummary = (
+      <span className='col-span-full font-mono text-sm font-semibold tabular-nums'>
+        {t('Free')}
+      </span>
+    )
+  } else if (dynamicSummary) {
     if (dynamicSummary.isSpecialExpression) {
       priceSummary = (
         <div className='col-span-full min-w-0'>
@@ -122,48 +135,56 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     } else if (dynamicSummary.primaryEntries.length > 0) {
       priceSummary = (
         <>
-          {dynamicSummary.primaryEntries
-            .slice(0, dynamicSummary.providerCount ? 2 : undefined)
-            .map((entry) => {
-              const unitLabelKey = getDynamicPriceUnitLabelKey(entry)
-              const unitLabel = taskUsageUnitLabel(
-                entry,
-                i18n.language,
-                unitLabelKey ? t(unitLabelKey) : tokenUnitLabel
+          {[
+            ...dynamicSummary.primaryEntries.slice(
+              0,
+              dynamicSummary.providerCount ? 2 : undefined
+            ),
+            ...dynamicSummary.secondaryEntries
+              .filter((entry) => entry.field === 'cacheReadPrice')
+              .slice(0, 1),
+          ].map((entry) => {
+            const unitLabelKey = getDynamicPriceUnitLabelKey(entry)
+            const unitLabel = taskUsageUnitLabel(
+              entry,
+              i18n.language,
+              unitLabelKey ? t(unitLabelKey) : tokenUnitLabel
+            )
+            let label: ReactNode = null
+            if (entry.labelKind !== 'schema') {
+              label = t(entry.shortLabel)
+            } else {
+              label = taskPriceLabel(
+                entry.description,
+                entry.shortLabel,
+                i18n.language
               )
-              let label: ReactNode = null
-              if (entry.labelKind !== 'schema') {
-                label = t(entry.shortLabel)
-              } else {
-                label = taskPriceLabel(
-                  entry.description,
-                  entry.shortLabel,
-                  i18n.language
-                )
-              }
-              return (
-                <div
-                  key={entry.key}
-                  className={cn(
-                    'flex min-w-0 flex-col gap-1',
-                    dynamicSummary.isTaskUsage && 'col-span-full'
-                  )}
-                >
-                  {label && (
-                    <span className='text-muted-foreground text-xs break-words whitespace-normal'>
-                      {label}
-                    </span>
-                  )}
-                  <span className='flex flex-wrap items-baseline gap-x-1 font-mono text-sm font-semibold tabular-nums'>
-                    <span>{entry.formattedRange ?? entry.formatted}</span>
-                    <span className='text-muted-foreground text-xs font-normal whitespace-nowrap'>
-                      {' '}
-                      / {unitLabel}
-                    </span>
+            }
+            return (
+              <div
+                key={entry.key}
+                className={cn(
+                  'flex min-w-0 flex-col gap-1',
+                  dynamicSummary.isTaskUsage && 'col-span-full'
+                )}
+              >
+                {label && (
+                  <span className='text-muted-foreground text-xs whitespace-nowrap'>
+                    {label}
                   </span>
-                </div>
-              )
-            })}
+                )}
+                <span className='flex flex-nowrap items-baseline gap-x-1 font-mono text-sm font-semibold tabular-nums'>
+                  <span className='whitespace-nowrap'>
+                    {entry.formattedRange ?? entry.formatted}
+                  </span>
+                  <span className='text-muted-foreground text-xs font-normal whitespace-nowrap'>
+                    {' '}
+                    / {unitLabel}
+                  </span>
+                </span>
+              </div>
+            )
+          })}
           {dynamicSummary.isTimePricing && (
             <span className='text-muted-foreground col-span-full text-xs'>
               {t('Current period price')}
@@ -210,13 +231,18 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       { type: 'input', label: t('Input') },
       { type: 'output', label: t('Output') },
       ...(props.model.cache_ratio != null
-        ? [{ type: 'cache' as const, label: t('Cached') }]
+        ? [{ type: 'cache' as const, label: t('Cache Read') }]
         : []),
     ]
     priceSummary = prices.map((price) => (
       <div key={price.type} className='flex min-w-0 flex-col gap-1'>
-        <span className='text-muted-foreground text-xs'>{price.label}</span>
-        <span className='font-mono text-sm font-semibold tabular-nums'>
+        <span className='text-muted-foreground truncate text-xs whitespace-nowrap'>
+          {price.label}
+          {price.type === 'cache' && (
+            <span className='sr-only'>{t('Cached')}</span>
+          )}
+        </span>
+        <span className='font-mono text-sm font-semibold whitespace-nowrap tabular-nums'>
           {formatPrice(
             props.model,
             price.type,
@@ -321,7 +347,6 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           aria-label={t('Pricing')}
           className='mt-auto flex min-w-0 flex-col gap-1.5'
         >
-          <ModelBillingModeBadge model={props.model} appearance='caption' />
           {dynamicSummary?.providerCount && (
             <span className='text-muted-foreground text-xs break-words'>
               {t('{{count}} providers', {
@@ -331,59 +356,60 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                 ` · ${t('Not configured for some providers')}`}
             </span>
           )}
-          <div className='grid grid-cols-[repeat(auto-fit,minmax(88px,1fr))] gap-x-3 gap-y-2'>
+          <div className='grid grid-cols-[repeat(3,minmax(0,1fr))] gap-x-3 gap-y-2'>
             {priceSummary}
           </div>
         </div>
-        {(groups.length > 0 || endpoints.length > 0) && (
-          <dl
-            className={cn(
-              'grid min-w-0 grid-cols-2 gap-3 text-xs',
-              (groups.length === 0 || endpoints.length === 0) && 'grid-cols-1'
-            )}
-          >
-            {groups.length > 0 && (
-              <div className='flex min-w-0 items-baseline gap-1.5'>
-                <dt className='text-muted-foreground shrink-0'>
-                  {t('Groups')}
-                </dt>
-                <dd className='flex min-w-0 items-baseline gap-1'>
-                  <span className='truncate' title={groups.join(', ')}>
-                    {groups[0]}
+        <dl
+          className={cn(
+            'grid min-w-0 grid-cols-2 gap-3 text-xs',
+            (groups.length === 0 || endpoints.length === 0) && 'grid-cols-1'
+          )}
+        >
+          <div className='flex min-w-0 items-baseline gap-1.5'>
+            <dd className='flex min-w-0 items-baseline gap-1'>
+              <ModelBillingModeBadge model={props.model} appearance='caption' />
+            </dd>
+          </div>
+          {groups.length > 0 && (
+            <div className='flex min-w-0 items-baseline gap-1.5'>
+              <dt className='text-muted-foreground shrink-0'>{t('Groups')}</dt>
+              <dd className='flex min-w-0 items-baseline gap-1'>
+                <span className='truncate' title={groups.join(', ')}>
+                  {groups[0]}
+                </span>
+                {groups.length > 1 && (
+                  <span
+                    className='text-muted-foreground shrink-0'
+                    title={groups.slice(1).join(', ')}
+                  >
+                    +{groups.length - 1}
                   </span>
-                  {groups.length > 1 && (
-                    <span
-                      className='text-muted-foreground shrink-0'
-                      title={groups.slice(1).join(', ')}
-                    >
-                      +{groups.length - 1}
-                    </span>
-                  )}
-                </dd>
-              </div>
-            )}
-            {endpoints.length > 0 && (
-              <div className='flex min-w-0 items-baseline gap-1.5'>
-                <dt className='text-muted-foreground shrink-0'>
-                  {t('Endpoints')}
-                </dt>
-                <dd className='flex min-w-0 items-baseline gap-1'>
-                  <span className='truncate' title={endpoints.join(', ')}>
-                    {endpoints.slice(0, 2).join(', ')}
+                )}
+              </dd>
+            </div>
+          )}
+          {endpoints.length > 0 && (
+            <div className='flex min-w-0 items-baseline gap-1.5'>
+              <dt className='text-muted-foreground shrink-0'>
+                {t('Endpoints')}
+              </dt>
+              <dd className='flex min-w-0 items-baseline gap-1'>
+                <span className='truncate' title={endpoints.join(', ')}>
+                  {endpoints.slice(0, 2).join(', ')}
+                </span>
+                {endpoints.length > 2 && (
+                  <span
+                    className='text-muted-foreground shrink-0'
+                    title={endpoints.slice(2).join(', ')}
+                  >
+                    +{endpoints.length - 2}
                   </span>
-                  {endpoints.length > 2 && (
-                    <span
-                      className='text-muted-foreground shrink-0'
-                      title={endpoints.slice(2).join(', ')}
-                    >
-                      +{endpoints.length - 2}
-                    </span>
-                  )}
-                </dd>
-              </div>
-            )}
-          </dl>
-        )}
+                )}
+              </dd>
+            </div>
+          )}
+        </dl>
       </CardContent>
       <CardFooter className='mt-auto border-0 bg-transparent pt-0'>
         <ModelPerfBadge

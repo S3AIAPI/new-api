@@ -39,6 +39,7 @@ import {
 import { compileBillingExpression } from './billing-expression/parser'
 import { getDisplayGroupRatio } from './model-helpers'
 import { withPluginPricing } from './plugin-pricing'
+import { FREE_REQUEST_PRICE_THRESHOLD_USD } from './price'
 import {
   evaluateTaskVisualConfig,
   getTaskNumberFields,
@@ -98,6 +99,29 @@ export type DynamicPricingSummary = {
   isMixedBilling?: boolean
   providerCount?: number
   hasUnconfiguredProviders?: boolean
+}
+
+/** A dynamic model is free when any input/output or per-call price is below
+ * the public threshold for the selected group. */
+export function isDynamicPricingFree(
+  summary: DynamicPricingSummary,
+  groupRatio = 1
+): boolean {
+  return summary.entries.some((entry) => {
+    const isModelLevelPrice =
+      entry.field === 'inputPrice' ||
+      entry.field === 'outputPrice' ||
+      entry.field === 'fixedPrice' ||
+      entry.field === 'modelPrice' ||
+      entry.unit === 'request' ||
+      entry.unit === 'image'
+    const price = entry.value * groupRatio
+    return (
+      isModelLevelPrice &&
+      Number.isFinite(price) &&
+      price < FREE_REQUEST_PRICE_THRESHOLD_USD
+    )
+  })
 }
 
 export function getTaskUsageQuantityUnitLabelKey(
@@ -342,17 +366,6 @@ export function getDynamicPriceEntries(
     if (!variable.field) return []
     const value = Number((tier as ParsedTier)[variable.field])
     if (!Number.isFinite(value) || value < 0) return []
-    // Same-price reads can stay in the expression to preserve accounting for
-    // overlapping usage. They do not need a separate displayed price. Keep
-    // explicit zero prices visible, even when the input itself is free.
-    if (
-      variable.key === 'cr' &&
-      value !== 0 &&
-      value === (tier as ParsedTier).inputPrice
-    ) {
-      return []
-    }
-
     return [
       {
         key: variable.key,

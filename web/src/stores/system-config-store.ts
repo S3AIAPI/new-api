@@ -48,6 +48,7 @@ export interface CurrencyConfig {
 }
 
 export type SiteTheme = 'system' | 'light' | 'dark'
+export type SiteThemeOverride = 'none' | 'light' | 'dark'
 export type SiteThemePreset =
   | 'default'
   | 'anthropic'
@@ -64,6 +65,7 @@ export interface SiteAppearanceConfig {
   backgroundImage: string
   backgroundBlurOpacity: number
   defaultTheme: SiteTheme
+  defaultThemeOverride: SiteThemeOverride
   defaultThemePreset: SiteThemePreset
   defaultThemeFont: 'default' | 'sans' | 'serif'
   defaultThemeRadius: 'default' | 'none' | 'sm' | 'md' | 'lg' | 'xl'
@@ -118,6 +120,7 @@ export const DEFAULT_SITE_APPEARANCE: SiteAppearanceConfig = {
   backgroundImage: '',
   backgroundBlurOpacity: 40,
   defaultTheme: 'system',
+  defaultThemeOverride: 'none',
   defaultThemePreset: 'default',
   defaultThemeFont: 'default',
   defaultThemeRadius: 'default',

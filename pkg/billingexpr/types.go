@@ -79,6 +79,7 @@ type BillingSnapshot struct {
 	ExprVersion               int            `json:"expr_version"`
 	TaskUsageBilling          bool           `json:"task_usage_billing,omitempty"`
 	UsageFacts                map[string]any `json:"usage_facts,omitempty"`
+	FreePriceCandidates       []float64      `json:"free_price_candidates,omitempty"`
 }
 
 // TieredResult holds everything needed after running tiered settlement.

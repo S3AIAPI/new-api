@@ -7138,6 +7138,26 @@
     "Recent status for {{name}}": "État récent de {{name}}",
     "Set up two-factor authentication before changing this setting.": "Configurez d'abord l'authentification à deux facteurs.",
     "Enter a current two-factor code to confirm this change.": "Saisissez un code à deux facteurs valide pour confirmer.",
-    "Require a two-factor code when signing in": "Exiger un code à deux facteurs lors de la connexion"
+    "Require a two-factor code when signing in": "Exiger un code à deux facteurs lors de la connexion",
+    "Balance must be greater than {{quota}}.": "Le solde doit être supérieur à {{quota}}.",
+    "Check-in spending threshold": "Seuil de dépenses pour le pointage",
+    "Daily check-in quota limit": "Limite quotidienne de crédits du pointage",
+    "Daily check-in user limit": "Limite quotidienne de participants",
+    "Export CSV": "Exporter CSV",
+    "Export progress": "Progression de l'export",
+    "Exporting all matching records...": "Export de tous les enregistrements...",
+    "Failed to export logs": "Échec de l'export des journaux",
+    "Force dark mode": "Forcer le mode sombre",
+    "Force light mode": "Forcer le mode clair",
+    "No override": "Aucun remplacement",
+    "Not eligible": "Non éligible",
+    "Set to 0 for unlimited daily check-in rewards.": "Définir sur 0 pour des récompenses quotidiennes illimitées.",
+    "Set to 0 for unlimited daily check-in users.": "Définir sur 0 pour un nombre quotidien illimité de participants.",
+    "Set to 0 to disable. Users must have spent at least this quota amount.": "Définir sur 0 pour désactiver. Les utilisateurs doivent avoir dépensé au moins ce montant de crédits.",
+    "The server is preparing your CSV file.": "Le serveur prépare votre fichier CSV.",
+    "Theme override": "Remplacement du thème",
+    "Today awarded {{amount}}/{{limit}} quota": "Crédits distribués aujourd'hui : {{amount}}/{{limit}}",
+    "Today checked in {{count}}/{{limit}} users": "Participants inscrits aujourd'hui : {{count}}/{{limit}}",
+    "Total spending must reach {{quota}}.": "Les dépenses totales doivent atteindre {{quota}}."
   }
 }

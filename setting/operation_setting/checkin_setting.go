@@ -4,19 +4,25 @@ import "github.com/QuantumNous/new-api/setting/config"
 
 // CheckinSetting 签到功能配置
 type CheckinSetting struct {
-	Enabled      bool `json:"enabled"`        // 是否启用签到功能
-	MinQuota     int  `json:"min_quota"`      // 签到最小额度奖励
-	MaxQuota     int  `json:"max_quota"`      // 签到最大额度奖励
-	MinUserQuota int  `json:"min_user_quota"` // 签到所需最低用户余额，0 表示不限制
+	Enabled          bool   `json:"enabled"`           // 是否启用签到功能
+	MinQuota         int    `json:"min_quota"`         // 签到最小额度奖励
+	MaxQuota         int    `json:"max_quota"`         // 签到最大额度奖励
+	MinUserQuota     int    `json:"min_user_quota"`    // 签到所需最低用户余额，0 表示不限制
+	MinUsedQuota     int    `json:"min_used_quota"`    // 签到所需最低累计消费，0 表示不限制
+	DailyUserLimit   int    `json:"daily_user_limit"`  // 每日最多签到人数，0 表示不限制
+	DailyQuotaLimit  int    `json:"daily_quota_limit"` // 每日最多发放额度，0 表示不限制
 	DeductibleGroups string `json:"deductible_groups"` // 允许抵扣签到额度的分组，逗号分隔；空表示不启用抵扣
 }
 
 // 默认配置
 var checkinSetting = CheckinSetting{
-	Enabled:      false, // 默认关闭
-	MinQuota:     1000,  // 默认最小额度 1000 (约 0.002 USD)
-	MaxQuota:     10000, // 默认最大额度 10000 (约 0.02 USD)
-	MinUserQuota: 0,
+	Enabled:          false, // 默认关闭
+	MinQuota:         1000,  // 默认最小额度 1000 (约 0.002 USD)
+	MaxQuota:         10000, // 默认最大额度 10000 (约 0.02 USD)
+	MinUserQuota:     0,
+	MinUsedQuota:     0,
+	DailyUserLimit:   0,
+	DailyQuotaLimit:  0,
 	DeductibleGroups: "",
 }
 

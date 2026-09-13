@@ -66,3 +66,19 @@ export async function getAuditLogs(
   }
   return response.data.data
 }
+
+export async function exportAuditLogsCsv(
+  scope: 'all' | 'self',
+  params: AuditFilters
+): Promise<Blob> {
+  const response = await api.get<Blob>(
+    scope === 'all' ? '/api/audit/export' : '/api/audit/self/export',
+    {
+      params,
+      responseType: 'blob',
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    }
+  )
+  return response.data
+}

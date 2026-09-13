@@ -354,14 +354,18 @@ func SetApiRouter(router *gin.Engine) {
 			redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
 		}
 		apiRouter.GET("/audit", middleware.DisableCache(), middleware.AdminAuth(), middleware.RequirePermission(authz.AuditRead), controller.GetAuditLogs)
+		apiRouter.GET("/audit/export", middleware.DisableCache(), middleware.AdminAuth(), middleware.RequirePermission(authz.AuditRead), controller.ExportAuditLogsCSV)
 		apiRouter.GET("/audit/self", middleware.DisableCache(), middleware.UserAuth(), controller.GetAuditLogs)
+		apiRouter.GET("/audit/self/export", middleware.DisableCache(), middleware.UserAuth(), controller.ExportAuditLogsCSV)
 		logRoute := apiRouter.Group("/log")
 		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
+		logRoute.GET("/export", middleware.AdminAuth(), controller.ExportLogsCSV)
 		logRoute.GET("/stat", middleware.AdminAuth(), controller.GetLogsStat)
 		logRoute.GET("/self/stat", middleware.UserAuth(), controller.GetLogsSelfStat)
 		logRoute.GET("/channel_affinity_usage_cache", middleware.AdminAuth(), controller.GetChannelAffinityUsageCacheStats)
 		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
 		logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
+		logRoute.GET("/self/export", middleware.UserAuth(), controller.ExportLogsCSV)
 		logRoute.GET("/self/search", middleware.UserAuth(), middleware.SearchRateLimit(), controller.SearchUserLogs)
 
 		systemTaskRoute := apiRouter.Group("/system-task")
@@ -408,11 +412,15 @@ func SetApiRouter(router *gin.Engine) {
 
 		mjRoute := apiRouter.Group("/mj")
 		mjRoute.GET("/self", middleware.UserAuth(), controller.GetUserMidjourney)
+		mjRoute.GET("/self/export", middleware.DisableCache(), middleware.UserAuth(), controller.ExportMidjourneyCSV)
+		mjRoute.GET("/export", middleware.DisableCache(), middleware.AdminAuth(), controller.ExportMidjourneyCSV)
 		mjRoute.GET("/", middleware.AdminAuth(), controller.GetAllMidjourney)
 
 		taskRoute := apiRouter.Group("/task")
 		{
 			taskRoute.GET("/self", middleware.UserAuth(), controller.GetUserTask)
+			taskRoute.GET("/self/export", middleware.DisableCache(), middleware.UserAuth(), controller.ExportTaskCSV)
+			taskRoute.GET("/export", middleware.DisableCache(), middleware.AdminAuth(), controller.ExportTaskCSV)
 			taskRoute.GET("", middleware.AdminAuth(), controller.GetAllTask)
 			taskRoute.GET("/:task_id/artifacts", middleware.UserAuth(), controller.GetDashboardTaskArtifacts)
 		}

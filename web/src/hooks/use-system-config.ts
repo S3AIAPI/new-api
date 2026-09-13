@@ -60,6 +60,7 @@ interface StatusApiResponse {
       background_image?: string
       background_blur_opacity?: number
       default_theme?: string
+      default_theme_override?: string
       default_theme_preset?: string
       default_theme_font?: string
       default_theme_radius?: string
@@ -110,6 +111,11 @@ function normalizeAppearance(
       value?.default_theme,
       ['system', 'light', 'dark'],
       defaults.defaultTheme
+    ),
+    defaultThemeOverride: enumValue(
+      value?.default_theme_override,
+      ['none', 'light', 'dark'],
+      defaults.defaultThemeOverride
     ),
     defaultThemePreset: enumValue(
       value?.default_theme_preset,

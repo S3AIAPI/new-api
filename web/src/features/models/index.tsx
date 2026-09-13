@@ -122,7 +122,6 @@ function ModelsContent() {
     <>
       <SectionPageLayout
         fixedContent
-        stackActionsOnMobile={activeSection === 'metadata'}
       >
         <SectionPageLayout.Title>{t(meta.titleKey)}</SectionPageLayout.Title>
         <SectionPageLayout.Actions>{actions}</SectionPageLayout.Actions>

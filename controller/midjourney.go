@@ -327,3 +327,22 @@ func GetUserMidjourney(c *gin.Context) {
 	pageInfo.SetItems(items)
 	common.ApiSuccess(c, pageInfo)
 }
+
+func ExportMidjourneyCSV(c *gin.Context) {
+	selfView := c.FullPath() == "/api/mj/self/export"
+	userID := 0
+	if selfView {
+		userID = c.GetInt("id")
+	}
+	queryParams := model.TaskQueryParams{
+		MjID:           c.Query("mj_id"),
+		StartTimestamp: c.Query("start_timestamp"),
+		EndTimestamp:   c.Query("end_timestamp"),
+	}
+	if !selfView {
+		queryParams.ChannelID = c.Query("channel_id")
+	}
+	writeCSVDownload(c, "drawing-logs", func(writer io.Writer) error {
+		return model.WriteMidjourneyCSV(writer, userID, queryParams)
+	})
+}

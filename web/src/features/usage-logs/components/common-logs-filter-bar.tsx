@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQueryClient, useIsFetching, useQuery } from '@tanstack/react-query'
 import { useNavigate, getRouteApi } from '@tanstack/react-router'
 import type { Table } from '@tanstack/react-table'
-import { Eye, EyeOff } from 'lucide-react'
+import { Download, Eye, EyeOff } from 'lucide-react'
 import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -45,12 +45,14 @@ import { useMediaQuery } from '@/hooks'
 import { getUserGroups } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
+import { exportLogsCsv } from '../api'
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
 import { buildSearchParams } from '../lib/filter'
-import { getDefaultTimeRange } from '../lib/utils'
+import { buildApiParams, getDefaultTimeRange } from '../lib/utils'
 import type { CommonLogFilters } from '../types'
 import { CommonLogsStats } from './common-logs-stats'
 import { CompactDateTimeRangePicker } from './compact-date-time-range-picker'
+import { LogsExportDialog } from './logs-export-dialog'
 import {
   LogsFilterField,
   LogsFilterInput,
@@ -132,6 +134,7 @@ export function CommonLogsFilterBar<TData>(
     setAutoRefreshEnabled,
   } = useUsageLogsContext()
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
+  const [exportOpen, setExportOpen] = useState(false)
   const { data: adminGroups } = useQuery({
     queryKey: ['groups'],
     queryFn: async () => requireServerSuccess(await getGroups()),
@@ -356,6 +359,30 @@ export function CommonLogsFilterBar<TData>(
     </Tooltip>
   )
 
+  const exportParams = () => {
+    const params = buildApiParams({
+      page: 1,
+      pageSize: 1,
+      searchParams,
+      columnFilters: props.table.getState().columnFilters,
+      isAdmin,
+    })
+    const { p: _page, page_size: _pageSize, ...withoutPagination } = params
+    return withoutPagination
+  }
+
+  const exportAction = (
+    <Button
+      type='button'
+      variant='outline'
+      onClick={() => setExportOpen(true)}
+      disabled={fetchingLogs > 0 || exportOpen}
+    >
+      <Download />
+      {t('Export CSV')}
+    </Button>
+  )
+
   const dateRangeFilter = (
     <LogsFilterField wide>
       <CompactDateTimeRangePicker
@@ -521,39 +548,54 @@ export function CommonLogsFilterBar<TData>(
   )
 
   return (
-    <LogsFilterToolbar
-      table={props.table}
-      compactMobile
-      stats={statsBar}
-      actionStart={sensitiveToggle}
-      primaryFilters={
-        <>
-          {dateRangeFilter}
-          {modelFilter}
-          {groupFilter}
-          {typeFilter}
-        </>
-      }
-      advancedFilters={advancedFilters}
-      mobilePinnedFilters={dateRangeFilter}
-      mobileFilters={
-        <>
-          {modelFilter}
-          {groupFilter}
-          {typeFilter}
-          {advancedFilters}
-        </>
-      }
-      mobileFilterCount={
-        [filters.model, filters.group, hasTypeFilter].filter(Boolean).length +
-        expandedFilterCount
-      }
-      hasAdvancedActiveFilters={hasExpandedFilters}
-      advancedFilterCount={expandedFilterCount}
-      hasActiveFilters={hasAdditionalFilters}
-      onSearch={() => handleApply()}
-      searchLoading={fetchingLogs > 0}
-      onReset={handleReset}
-    />
+    <>
+      <LogsFilterToolbar
+        table={props.table}
+        compactMobile
+        stats={statsBar}
+        actionStart={
+          <>
+            {sensitiveToggle}
+            {exportAction}
+          </>
+        }
+        primaryFilters={
+          <>
+            {dateRangeFilter}
+            {modelFilter}
+            {groupFilter}
+            {typeFilter}
+          </>
+        }
+        advancedFilters={advancedFilters}
+        mobilePinnedFilters={dateRangeFilter}
+        mobileFilters={
+          <>
+            {modelFilter}
+            {groupFilter}
+            {typeFilter}
+            {advancedFilters}
+          </>
+        }
+        mobileFilterCount={
+          [filters.model, filters.group, hasTypeFilter].filter(Boolean).length +
+          expandedFilterCount
+        }
+        hasAdvancedActiveFilters={hasExpandedFilters}
+        advancedFilterCount={expandedFilterCount}
+        hasActiveFilters={hasAdditionalFilters}
+        onSearch={() => handleApply()}
+        searchLoading={fetchingLogs > 0}
+        onReset={handleReset}
+      />
+      {exportOpen && (
+        <LogsExportDialog
+          open
+          fileName={`usage-logs-${Date.now()}.csv`}
+          request={() => exportLogsCsv(exportParams(), isAdmin)}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
+    </>
   )
 }

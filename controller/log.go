@@ -1,8 +1,12 @@
 package controller
 
 import (
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -58,6 +62,54 @@ func GetUserLogs(c *gin.Context) {
 	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
 	return
+}
+
+func ExportLogsCSV(c *gin.Context) {
+	logType, _ := strconv.Atoi(c.Query("type"))
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	username := c.Query("username")
+	channel, _ := strconv.Atoi(c.Query("channel"))
+	userId := 0
+	selfView := c.FullPath() == "/api/log/self/export"
+	if selfView {
+		userId = c.GetInt("id")
+		username = ""
+		channel = 0
+	}
+	writeCSVDownload(c, "usage-logs", func(writer io.Writer) error {
+		return model.WriteLogsCSV(writer, userId, logType, startTimestamp, endTimestamp, c.Query("model_name"), username, c.Query("token_name"), channel, c.Query("group"), c.Query("request_id"), c.Query("upstream_request_id"), c.GetInt("role"), selfView)
+	})
+}
+
+func writeCSVDownload(c *gin.Context, name string, write func(io.Writer) error) {
+	file, err := os.CreateTemp("", name+"-*.csv")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	path := file.Name()
+	defer os.Remove(path)
+	if err := write(file); err != nil {
+		_ = file.Close()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	if err := file.Close(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.FileAttachment(path, fmt.Sprintf("%s-%s.csv", name, time.Now().Format("20060102-150405")))
 }
 
 // Deprecated: SearchAllLogs 已废弃，前端未使用该接口。

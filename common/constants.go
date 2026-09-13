@@ -25,6 +25,11 @@ var TopUpLink = ""
 // var ChatLink = ""
 // var ChatLink2 = ""
 var QuotaPerUnit = 500 * 1000.0 // $0.002 / 1K tokens
+
+// FreeModelPriceThresholdUSD is the smallest billable public model price.
+// Input/output prices use USD per million tokens; fixed prices use USD per request.
+const FreeModelPriceThresholdUSD = 0.000002
+
 // 保留旧变量以兼容历史逻辑，实际展示由 general_setting.quota_display_type 控制
 var DisplayInCurrencyEnabled = true
 var DisplayTokenStatEnabled = true

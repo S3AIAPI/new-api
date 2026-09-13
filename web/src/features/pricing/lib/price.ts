@@ -24,7 +24,7 @@ import { QUOTA_TYPE_VALUES, TOKEN_UNIT_DIVISORS } from '../constants'
 import type { PricingModel, TokenUnit, PriceType } from '../types'
 import { getConfiguredGroupRatio, getDisplayGroupRatio } from './model-helpers'
 
-const FREE_REQUEST_PRICE_THRESHOLD_USD = 0.000002
+export const FREE_REQUEST_PRICE_THRESHOLD_USD = 0.000002
 
 // ----------------------------------------------------------------------------
 // Price Calculation Utilities
@@ -166,11 +166,7 @@ export function formatPrice(
   // displayed million-token unit is below the public free threshold. Keep the
   // label consistent across both columns/cards when one side is effectively
   // free.
-  if (
-    showCurrencySymbol &&
-    (type === 'input' || type === 'output') &&
-    isTokenPriceFree(model, displayGroupRatio)
-  ) {
+  if (isTokenPriceFree(model, displayGroupRatio)) {
     return t('Free')
   }
   priceInUSD = applyRechargeRate(
@@ -208,10 +204,7 @@ export function formatGroupPrice(
 
   const ratio = getConfiguredGroupRatio(groupRatio, group)
   let priceInUSD = calculateTokenPrice(model, type, ratio)
-  if (
-    (type === 'input' || type === 'output') &&
-    isTokenPriceFree(model, ratio)
-  ) {
+  if (isTokenPriceFree(model, ratio)) {
     return t('Free')
   }
   priceInUSD = applyRechargeRate(
@@ -291,7 +284,7 @@ export function formatRequestPrice(
   const displayGroupRatio = getDisplayGroupRatio(model, selectedGroup)
 
   let priceInUSD = (model.model_price || 0) * displayGroupRatio
-  if (showCurrencySymbol && priceInUSD < FREE_REQUEST_PRICE_THRESHOLD_USD) {
+  if (priceInUSD < FREE_REQUEST_PRICE_THRESHOLD_USD) {
     return t('Free')
   }
 

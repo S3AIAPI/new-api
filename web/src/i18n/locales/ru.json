@@ -7138,6 +7138,26 @@
     "Recent status for {{name}}": "Недавнее состояние {{name}}",
     "Set up two-factor authentication before changing this setting.": "Настройте двухфакторную аутентификацию перед изменением этой настройки.",
     "Enter a current two-factor code to confirm this change.": "Введите действующий код двухфакторной аутентификации для подтверждения.",
-    "Require a two-factor code when signing in": "Запрашивать код двухфакторной аутентификации при входе"
+    "Require a two-factor code when signing in": "Запрашивать код двухфакторной аутентификации при входе",
+    "Balance must be greater than {{quota}}.": "Баланс должен быть больше {{quota}}.",
+    "Check-in spending threshold": "Порог расходов для отметки",
+    "Daily check-in quota limit": "Дневной лимит квоты за отметки",
+    "Daily check-in user limit": "Дневной лимит пользователей для отметок",
+    "Export CSV": "Экспортировать CSV",
+    "Export progress": "Ход экспорта",
+    "Exporting all matching records...": "Экспорт всех подходящих записей...",
+    "Failed to export logs": "Не удалось экспортировать журналы",
+    "Force dark mode": "Принудительно темная тема",
+    "Force light mode": "Принудительно светлая тема",
+    "No override": "Без переопределения",
+    "Not eligible": "Условия не выполнены",
+    "Set to 0 for unlimited daily check-in rewards.": "Укажите 0, чтобы снять дневной лимит наград за отметки.",
+    "Set to 0 for unlimited daily check-in users.": "Укажите 0, чтобы снять дневной лимит пользователей.",
+    "Set to 0 to disable. Users must have spent at least this quota amount.": "Укажите 0, чтобы отключить. Пользователь должен потратить не меньше этой квоты.",
+    "The server is preparing your CSV file.": "Сервер готовит CSV-файл.",
+    "Theme override": "Переопределение темы",
+    "Today awarded {{amount}}/{{limit}} quota": "Сегодня выдано квоты: {{amount}}/{{limit}}",
+    "Today checked in {{count}}/{{limit}} users": "Сегодня отметились: {{count}}/{{limit}} пользователей",
+    "Total spending must reach {{quota}}.": "Общие расходы должны достигнуть {{quota}}."
   }
 }

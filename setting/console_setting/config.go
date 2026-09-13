@@ -22,6 +22,7 @@ type ConsoleSetting struct {
 	BackgroundImage          string `json:"background_image"`
 	BackgroundBlurOpacity    int    `json:"background_blur_opacity"`
 	DefaultTheme             string `json:"default_theme"`
+	DefaultThemeOverride     string `json:"default_theme_override"`
 	DefaultThemePreset       string `json:"default_theme_preset"`
 	DefaultThemeFont         string `json:"default_theme_font"`
 	DefaultThemeRadius       string `json:"default_theme_radius"`
@@ -57,6 +58,7 @@ var defaultConsoleSetting = ConsoleSetting{
 	FAQEnabled:               true,
 	BackgroundBlurOpacity:    40,
 	DefaultTheme:             "system",
+	DefaultThemeOverride:     "none",
 	DefaultThemePreset:       "default",
 	DefaultThemeFont:         "default",
 	DefaultThemeRadius:       "default",
@@ -97,6 +99,7 @@ type AppearanceSetting struct {
 	BackgroundImage          string `json:"background_image"`
 	BackgroundBlurOpacity    int    `json:"background_blur_opacity"`
 	DefaultTheme             string `json:"default_theme"`
+	DefaultThemeOverride     string `json:"default_theme_override"`
 	DefaultThemePreset       string `json:"default_theme_preset"`
 	DefaultThemeFont         string `json:"default_theme_font"`
 	DefaultThemeRadius       string `json:"default_theme_radius"`
@@ -137,6 +140,7 @@ func GetAppearanceSetting() AppearanceSetting {
 		BackgroundImage:          consoleSetting.BackgroundImage,
 		BackgroundBlurOpacity:    consoleSetting.BackgroundBlurOpacity,
 		DefaultTheme:             consoleSetting.DefaultTheme,
+		DefaultThemeOverride:     consoleSetting.DefaultThemeOverride,
 		DefaultThemePreset:       consoleSetting.DefaultThemePreset,
 		DefaultThemeFont:         consoleSetting.DefaultThemeFont,
 		DefaultThemeRadius:       consoleSetting.DefaultThemeRadius,
@@ -212,6 +216,8 @@ func ValidatePublicOption(key, value string) error {
 		}
 	case "default_theme":
 		return validateEnum(value, "system", "light", "dark")
+	case "default_theme_override":
+		return validateEnum(value, "none", "light", "dark")
 	case "default_theme_preset":
 		return validateEnum(value, "default", "anthropic", "simple-large", "underground", "rose-garden", "lake-view", "sunset-glow", "forest-whisper", "ocean-breeze", "lavender-dream")
 	case "default_theme_font":

@@ -22,6 +22,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 
@@ -44,6 +45,7 @@ type ThemeProviderProps = {
 
 type ThemeProviderState = {
   defaultTheme: Theme
+  isForced: boolean
   resolvedTheme: ResolvedTheme
   theme: Theme
   setTheme: (theme: Theme) => void
@@ -52,6 +54,7 @@ type ThemeProviderState = {
 
 const initialState: ThemeProviderState = {
   defaultTheme: DEFAULT_THEME,
+  isForced: false,
   resolvedTheme: 'light',
   theme: DEFAULT_THEME,
   setTheme: () => null,
@@ -85,19 +88,34 @@ export function ThemeProvider({
   const configuredDefaultTheme = useSystemConfigStore(
     (state) => state.config.appearance?.defaultTheme
   )
-  const effectiveDefaultTheme = THEMES.has(configuredDefaultTheme as Theme)
+  const configuredThemeOverride = useSystemConfigStore(
+    (state) => state.config.appearance?.defaultThemeOverride
+  )
+  const forcedTheme: ResolvedTheme | null =
+    configuredThemeOverride === 'light' || configuredThemeOverride === 'dark'
+      ? configuredThemeOverride
+      : null
+  const effectiveDefaultTheme = forcedTheme ?? (THEMES.has(configuredDefaultTheme as Theme)
     ? (configuredDefaultTheme as Theme)
-    : defaultTheme
+    : defaultTheme)
+  const previousForcedTheme = useRef<ResolvedTheme | null>(forcedTheme)
   const [theme, _setTheme] = useState<Theme>(() =>
-    getStoredTheme(storageKey, effectiveDefaultTheme)
+    forcedTheme ?? getStoredTheme(storageKey, effectiveDefaultTheme)
   )
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
-    resolveTheme(getStoredTheme(storageKey, effectiveDefaultTheme))
+    resolveTheme(forcedTheme ?? getStoredTheme(storageKey, effectiveDefaultTheme))
   )
 
   useEffect(() => {
-    if (!getCookie(storageKey)) _setTheme(effectiveDefaultTheme)
-  }, [effectiveDefaultTheme, storageKey])
+    if (forcedTheme) {
+      _setTheme(forcedTheme)
+    } else if (previousForcedTheme.current) {
+      _setTheme(getStoredTheme(storageKey, effectiveDefaultTheme))
+    } else if (!getCookie(storageKey)) {
+      _setTheme(effectiveDefaultTheme)
+    }
+    previousForcedTheme.current = forcedTheme
+  }, [effectiveDefaultTheme, forcedTheme, storageKey])
 
   useEffect(() => {
     const root = window.document.documentElement
@@ -118,27 +136,33 @@ export function ThemeProvider({
   }, [theme])
 
   const setTheme = useCallback(
-    (theme: Theme) => {
-      setCookie(storageKey, theme, THEME_COOKIE_MAX_AGE)
-      _setTheme(theme)
+    (nextTheme: Theme) => {
+      if (forcedTheme) return
+      setCookie(storageKey, nextTheme, THEME_COOKIE_MAX_AGE)
+      _setTheme(nextTheme)
     },
-    [storageKey]
+    [forcedTheme, storageKey]
   )
 
   const resetTheme = useCallback(() => {
+    if (forcedTheme) {
+      _setTheme(forcedTheme)
+      return
+    }
     removeCookie(storageKey)
     _setTheme(effectiveDefaultTheme)
-  }, [effectiveDefaultTheme, storageKey])
+  }, [effectiveDefaultTheme, forcedTheme, storageKey])
 
   const contextValue = useMemo(
     () => ({
       defaultTheme: effectiveDefaultTheme,
+      isForced: forcedTheme !== null,
       resolvedTheme,
       resetTheme,
       theme,
       setTheme,
     }),
-    [effectiveDefaultTheme, resolvedTheme, resetTheme, theme, setTheme]
+    [effectiveDefaultTheme, forcedTheme, resolvedTheme, resetTheme, theme, setTheme]
   )
 
   return (

@@ -214,11 +214,7 @@ describe('model cards', () => {
       within(tagField).getByText('video-generation, high-resolution')
     ).toHaveAttribute('title', tags.join(', '))
     expect(within(tagField).getByText('+4')).toBeVisible()
-    expect(
-      within(screen.getByRole('group', { name: 'Pricing' })).getByText(
-        'Token-based'
-      )
-    ).toBeVisible()
+    expect(screen.getByText('Token-based')).toBeVisible()
   })
 
   it('omits metadata fields when the model has no groups, endpoints or tags', () => {
@@ -275,7 +271,7 @@ describe('model cards', () => {
     expect(screen.getByText('Output').parentElement).toHaveTextContent(
       /\$9\s*\/\s*1M/
     )
-    expect(screen.getByText('Cached').parentElement).toHaveTextContent(
+    expect(screen.getByText('Cache Read').parentElement).toHaveTextContent(
       /\$0\s*\/\s*1M/
     )
     rerender(<ModelCard {...props} tokenUnit='K' />)
@@ -285,7 +281,7 @@ describe('model cards', () => {
     expect(screen.getByText('Output').parentElement).toHaveTextContent(
       /\$0.009\s*\/\s*1K/
     )
-    expect(screen.getByText('Cached').parentElement).toHaveTextContent(
+    expect(screen.getByText('Cache Read').parentElement).toHaveTextContent(
       /\$0\s*\/\s*1K/
     )
   })

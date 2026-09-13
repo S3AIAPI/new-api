@@ -27,6 +27,7 @@ describe('mapStatusDataToConfig', () => {
         background_image: '/background.webp',
         background_blur_opacity: 60,
         default_theme: 'dark',
+        default_theme_override: 'light',
         default_theme_preset: 'anthropic',
         default_theme_font: 'serif',
         default_theme_radius: 'lg',
@@ -50,6 +51,7 @@ describe('mapStatusDataToConfig', () => {
       backgroundImage: '/background.webp',
       backgroundBlurOpacity: 60,
       defaultTheme: 'dark',
+      defaultThemeOverride: 'light',
       defaultThemePreset: 'anthropic',
       defaultThemeFont: 'serif',
       defaultThemeRadius: 'lg',
@@ -73,12 +75,14 @@ describe('mapStatusDataToConfig', () => {
     const config = mapStatusDataToConfig({
       site_appearance: {
         default_theme: 'invalid',
+        default_theme_override: 'system',
         default_sidebar_layout: 'invalid',
         model_square_default_view: 'invalid',
       },
     })
 
     expect(config.appearance?.defaultTheme).toBe('system')
+    expect(config.appearance?.defaultThemeOverride).toBe('none')
     expect(config.appearance?.defaultSidebarLayout).toBe('expanded')
     expect(config.appearance?.modelSquareDefaultView).toBe('card')
   })

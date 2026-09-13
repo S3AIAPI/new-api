@@ -166,6 +166,7 @@ export type SiteSettings = {
   'console_setting.background_image': string
   'console_setting.background_blur_opacity': number
   'console_setting.default_theme': 'system' | 'light' | 'dark'
+  'console_setting.default_theme_override': 'none' | 'light' | 'dark'
   'console_setting.default_theme_preset':
     | 'default'
     | 'anthropic'
@@ -477,6 +478,9 @@ export type BillingSettings = {
   'checkin_setting.min_quota': number
   'checkin_setting.max_quota': number
   'checkin_setting.min_user_quota': number
+  'checkin_setting.min_used_quota': number
+  'checkin_setting.daily_user_limit': number
+  'checkin_setting.daily_quota_limit': number
   'checkin_setting.deductible_groups': string
   PaymentAnnouncement: string
 }

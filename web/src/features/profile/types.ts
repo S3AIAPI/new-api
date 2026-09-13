@@ -229,10 +229,32 @@ export interface CheckinStatusResponse {
   enabled: boolean
   /** Minimum user quota required for check-in; zero disables the gate */
   min_user_quota: number
+  min_used_quota: number
+  daily_user_limit: number
+  daily_quota_limit: number
   eligible?: boolean
   current_quota?: number
+  current_used_quota?: number
+  today_user_count?: number
+  today_quota_awarded?: number
+  daily_quota_remaining?: number
+  eligibility?: CheckinEligibility
   /** Check-in statistics */
   stats: CheckinStats
+}
+
+export interface CheckinEligibility {
+  eligible: boolean
+  already_checked_in: boolean
+  balance_met: boolean
+  total_spend_met: boolean
+  daily_user_limit_met: boolean
+  daily_quota_limit_met: boolean
+  current_quota: number
+  current_used_quota: number
+  today_user_count: number
+  today_quota_awarded: number
+  daily_quota_remaining: number
 }
 
 /**

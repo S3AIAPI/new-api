@@ -7138,6 +7138,26 @@
     "Recent status for {{name}}": "{{name}} 的近期状态",
     "Set up two-factor authentication before changing this setting.": "请先设置两步验证，再更改此设置。",
     "Enter a current two-factor code to confirm this change.": "请输入当前两步验证码以确认此更改。",
-    "Require a two-factor code when signing in": "登录时要求输入两步验证码"
+    "Require a two-factor code when signing in": "登录时要求输入两步验证码",
+    "Balance must be greater than {{quota}}.": "余额必须大于 {{quota}}。",
+    "Check-in spending threshold": "签到消费门槛",
+    "Daily check-in quota limit": "每日签到额度上限",
+    "Daily check-in user limit": "每日签到人数上限",
+    "Export CSV": "导出 CSV",
+    "Export progress": "导出进度",
+    "Exporting all matching records...": "正在导出所有匹配记录……",
+    "Failed to export logs": "导出日志失败",
+    "Force dark mode": "强制深色模式",
+    "Force light mode": "强制浅色模式",
+    "No override": "不覆盖",
+    "Not eligible": "不符合条件",
+    "Set to 0 for unlimited daily check-in rewards.": "设置为 0 表示每日签到赠金不限额。",
+    "Set to 0 for unlimited daily check-in users.": "设置为 0 表示每日签到人数不限。",
+    "Set to 0 to disable. Users must have spent at least this quota amount.": "设置为 0 表示禁用。用户累计消费额度必须达到此数值。",
+    "The server is preparing your CSV file.": "服务器正在准备 CSV 文件。",
+    "Theme override": "主题覆盖",
+    "Today awarded {{amount}}/{{limit}} quota": "今日已发放 {{amount}}/{{limit}} 额度",
+    "Today checked in {{count}}/{{limit}} users": "今日已签到 {{count}}/{{limit}} 人",
+    "Total spending must reach {{quota}}.": "累计消费必须达到 {{quota}}。"
   }
 }

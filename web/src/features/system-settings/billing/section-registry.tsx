@@ -253,6 +253,9 @@ const BILLING_SECTIONS = [
           minQuota: settings['checkin_setting.min_quota'],
           maxQuota: settings['checkin_setting.max_quota'],
           minUserQuota: settings['checkin_setting.min_user_quota'],
+          minUsedQuota: settings['checkin_setting.min_used_quota'],
+          dailyUserLimit: settings['checkin_setting.daily_user_limit'],
+          dailyQuotaLimit: settings['checkin_setting.daily_quota_limit'],
           deductibleGroups: settings['checkin_setting.deductible_groups'],
         }}
       />
