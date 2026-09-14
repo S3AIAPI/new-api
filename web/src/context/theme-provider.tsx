@@ -21,6 +21,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -95,15 +96,19 @@ export function ThemeProvider({
     configuredThemeOverride === 'light' || configuredThemeOverride === 'dark'
       ? configuredThemeOverride
       : null
-  const effectiveDefaultTheme = forcedTheme ?? (THEMES.has(configuredDefaultTheme as Theme)
-    ? (configuredDefaultTheme as Theme)
-    : defaultTheme)
+  const effectiveDefaultTheme =
+    forcedTheme ??
+    (THEMES.has(configuredDefaultTheme as Theme)
+      ? (configuredDefaultTheme as Theme)
+      : defaultTheme)
   const previousForcedTheme = useRef<ResolvedTheme | null>(forcedTheme)
-  const [theme, _setTheme] = useState<Theme>(() =>
-    forcedTheme ?? getStoredTheme(storageKey, effectiveDefaultTheme)
+  const [theme, _setTheme] = useState<Theme>(
+    () => forcedTheme ?? getStoredTheme(storageKey, effectiveDefaultTheme)
   )
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
-    resolveTheme(forcedTheme ?? getStoredTheme(storageKey, effectiveDefaultTheme))
+    resolveTheme(
+      forcedTheme ?? getStoredTheme(storageKey, effectiveDefaultTheme)
+    )
   )
 
   useEffect(() => {
@@ -117,7 +122,7 @@ export function ThemeProvider({
     previousForcedTheme.current = forcedTheme
   }, [effectiveDefaultTheme, forcedTheme, storageKey])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = window.document.documentElement
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
 
@@ -125,6 +130,7 @@ export function ThemeProvider({
       const nextResolvedTheme = theme === 'system' ? getSystemTheme() : theme
       root.classList.remove('light', 'dark')
       root.classList.add(nextResolvedTheme)
+      root.style.colorScheme = nextResolvedTheme
       setResolvedTheme(nextResolvedTheme)
     }
 
@@ -162,7 +168,14 @@ export function ThemeProvider({
       theme,
       setTheme,
     }),
-    [effectiveDefaultTheme, forcedTheme, resolvedTheme, resetTheme, theme, setTheme]
+    [
+      effectiveDefaultTheme,
+      forcedTheme,
+      resolvedTheme,
+      resetTheme,
+      theme,
+      setTheme,
+    ]
   )
 
   return (

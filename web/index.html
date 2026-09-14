@@ -21,6 +21,71 @@
     />
 
     <meta name="theme-color" content="#fff" />
+    <style data-theme-bootstrap>
+      html {
+        background: #fff;
+        color-scheme: light;
+      }
+      html.dark {
+        background: #202020;
+        color-scheme: dark;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not(.light) {
+          background: #202020;
+          color-scheme: dark;
+        }
+      }
+      body {
+        background: inherit;
+      }
+    </style>
+    <script data-theme-bootstrap>
+      ;(function () {
+        var root = document.documentElement
+        var cookieMatch = document.cookie.match(
+          /(?:^|;\s*)vite-ui-theme=(dark|light|system)(?:;|$)/
+        )
+        var theme = cookieMatch ? cookieMatch[1] : ''
+
+        try {
+          var cachedStatus = window.localStorage.getItem('status')
+          var status = cachedStatus ? JSON.parse(cachedStatus) : null
+          var appearance = status && status.site_appearance
+          var override = appearance && appearance.default_theme_override
+          var configured = appearance && appearance.default_theme
+
+          if (override === 'dark' || override === 'light') {
+            theme = override
+          } else if (
+            !theme &&
+            (configured === 'dark' ||
+              configured === 'light' ||
+              configured === 'system')
+          ) {
+            theme = configured
+          }
+        } catch (_) {
+          // Storage can be unavailable or contain an older payload.
+        }
+
+        var isDark =
+          theme === 'dark' ||
+          (theme !== 'light' &&
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches)
+        var resolvedTheme = isDark ? 'dark' : 'light'
+
+        root.classList.remove('light', 'dark')
+        root.classList.add(resolvedTheme)
+        root.style.colorScheme = resolvedTheme
+
+        var themeColor = document.querySelector('meta[name="theme-color"]')
+        if (themeColor) {
+          themeColor.setAttribute('content', isDark ? '#202020' : '#fff')
+        }
+      })()
+    </script>
     <!--umami-->
     <!--Google Analytics-->
   </head>

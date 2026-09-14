@@ -32,15 +32,15 @@ import { cn } from '@/lib/utils'
 
 export function ThemeSwitch() {
   const { t } = useTranslation()
-  const { isForced, theme, setTheme } = useTheme()
+  const { isForced, resolvedTheme, theme, setTheme } = useTheme()
 
   /* Update theme-color meta tag
    * when theme is updated */
   useEffect(() => {
-    const themeColor = theme === 'dark' ? '#020817' : '#fff'
+    const themeColor = resolvedTheme === 'dark' ? '#202020' : '#fff'
     const metaThemeColor = document.querySelector("meta[name='theme-color']")
     if (metaThemeColor) metaThemeColor.setAttribute('content', themeColor)
-  }, [theme])
+  }, [resolvedTheme])
 
   return (
     <DropdownMenu modal={false}>
@@ -66,7 +66,10 @@ export function ThemeSwitch() {
             className={cn('ms-auto', theme !== 'dark' && 'hidden')}
           />
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={isForced} onClick={() => setTheme('system')}>
+        <DropdownMenuItem
+          disabled={isForced}
+          onClick={() => setTheme('system')}
+        >
           {t('System')}
           <Check
             size={14}

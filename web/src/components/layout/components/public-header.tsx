@@ -142,8 +142,16 @@ export function PublicHeader(props: PublicHeaderProps) {
     }
 
     setFloatingEntered(false)
-    const frame = window.requestAnimationFrame(() => setFloatingEntered(true))
-    return () => window.cancelAnimationFrame(frame)
+    let secondFrameId = 0
+    const firstFrameId = window.requestAnimationFrame(() => {
+      secondFrameId = window.requestAnimationFrame(() => {
+        setFloatingEntered(true)
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(firstFrameId)
+      window.cancelAnimationFrame(secondFrameId)
+    }
   }, [floating, animateFloatingEntrance])
 
   useEffect(() => {
@@ -187,9 +195,7 @@ export function PublicHeader(props: PublicHeaderProps) {
     floating && (floatingEntered || !animateFloatingEntrance)
   let headerContainerClass = 'max-w-7xl px-4 pt-0 md:px-6'
   if (floating) {
-    headerContainerClass = floatingActive
-      ? 'max-w-[1230px] px-4 pt-0 sm:px-6 lg:px-0'
-      : 'max-w-full px-0 pt-0'
+    headerContainerClass = 'max-w-[1230px] px-4 pt-0 sm:px-6 lg:px-0'
   }
   if (!floating && scrolled) headerContainerClass = 'max-w-[52rem] px-3 pt-3'
 

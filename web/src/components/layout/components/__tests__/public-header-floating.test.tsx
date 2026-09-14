@@ -69,18 +69,18 @@ vi.mock('@/stores/auth-store', () => ({
 }))
 
 describe('floating public header', () => {
-  let enterFrame: FrameRequestCallback | undefined
+  let frames: FrameRequestCallback[]
 
   beforeEach(() => {
-    enterFrame = undefined
+    frames = []
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      enterFrame = callback
-      return 1
+      frames.push(callback)
+      return frames.length
     })
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined)
   })
 
-  test('transitions from the top-docked state into the floating state', () => {
+  test('starts constrained and docked before entering the floating state', () => {
     const { container } = render(
       <PublicHeader
         floating
@@ -92,13 +92,23 @@ describe('floating public header', () => {
       />
     )
     const header = container.querySelector('header')
+    const headerContainer = header?.firstElementChild
+    const navigation = header?.querySelector('[data-slot="public-navigation"]')
 
     expect(header).toHaveAttribute('data-floating-state', 'docked')
     expect(header?.className).toContain('top-0')
+    expect(headerContainer?.className).toContain('max-w-[1230px]')
+    expect(navigation?.className).toContain('h-16')
 
-    act(() => enterFrame?.(performance.now()))
+    act(() => frames[0]?.(performance.now()))
+
+    expect(header).toHaveAttribute('data-floating-state', 'docked')
+    expect(headerContainer?.className).toContain('max-w-[1230px]')
+
+    act(() => frames[1]?.(performance.now()))
 
     expect(header).toHaveAttribute('data-floating-state', 'floating')
     expect(header?.className).toContain('top-4')
+    expect(headerContainer?.className).toContain('max-w-[1230px]')
   })
 })
