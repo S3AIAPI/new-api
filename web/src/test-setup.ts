@@ -17,10 +17,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import i18next from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { afterEach, beforeAll } from 'vitest'
+
+// The testing-library default of 1000ms for findBy*/waitFor is too tight for
+// this suite on contended CI runners, where a first-in-file test also pays the
+// full cold-render cost. Keep it below vitest's testTimeout so async lookup
+// failures still report the missing element instead of a generic test timeout.
+configure({ asyncUtilTimeout: 5000 })
 
 beforeAll(async () => {
   await i18next.use(initReactI18next).init({
@@ -38,10 +44,18 @@ afterEach(() => {
   cleanup()
 })
 
+// Prefer reduced motion in tests: entrance animations write inline
+// `opacity: 0` on their first frame, and jsdom advances frames through a
+// setTimeout-based rAF shim, so jest-dom visibility assertions would race the
+// animation. The reduced-motion code paths render the same DOM without
+// transient hidden states. Both `(prefers-reduced-motion: reduce)` and the
+// boolean `(prefers-reduced-motion)` form match; `no-preference` does not.
 Object.defineProperty(window, 'matchMedia', {
   configurable: true,
   value: (query: string): MediaQueryList => ({
-    matches: false,
+    matches:
+      query.includes('prefers-reduced-motion') &&
+      !query.includes('no-preference'),
     media: query,
     onchange: null,
     addListener: () => undefined,
@@ -52,27 +66,22 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 })
 
-if (!window.localStorage) {
-  const storage = new Map<string, string>()
-  Object.defineProperty(window, 'localStorage', {
+// jsdom does not implement Range geometry. CodeMirror measures text through
+// these browser APIs; actual wrapping and scrolling are checked in browser QA.
+if (!Range.prototype.getClientRects) {
+  Object.defineProperty(Range.prototype, 'getClientRects', {
     configurable: true,
-    value: {
-      clear: () => storage.clear(),
-      getItem: (key: string) => storage.get(key) ?? null,
-      key: (index: number) => [...storage.keys()][index] ?? null,
-      removeItem: (key: string) => storage.delete(key),
-      setItem: (key: string, value: string) => storage.set(key, String(value)),
-      get length() {
-        return storage.size
-      },
-    } satisfies Storage,
+    writable: true,
+    value: () => [],
   })
 }
-
-Object.defineProperty(globalThis, 'localStorage', {
-  configurable: true,
-  value: window.localStorage,
-})
+if (!Range.prototype.getBoundingClientRect) {
+  Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+    configurable: true,
+    writable: true,
+    value: () => new DOMRect(),
+  })
+}
 
 window.requestAnimationFrame = (callback: FrameRequestCallback) =>
   window.setTimeout(() => callback(performance.now()), 0)
@@ -93,3 +102,31 @@ Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
   configurable: true,
   value: () => undefined,
 })
+
+// Node.js 25+ exposes storage accessors that resolve to undefined unless a
+// backing file is configured. Keep both browser storage APIs available in
+// jsdom without sharing state between them.
+for (const name of ['localStorage', 'sessionStorage'] as const) {
+  if (typeof globalThis[name]?.setItem === 'function') continue
+  const entries = new Map<string, string>()
+  const storage: Storage = {
+    get length() {
+      return entries.size
+    },
+    clear: () => entries.clear(),
+    getItem: (key) => entries.get(String(key)) ?? null,
+    key: (index) => [...entries.keys()][index] ?? null,
+    removeItem: (key) => {
+      entries.delete(String(key))
+    },
+    setItem: (key, value) => {
+      entries.set(String(key), String(value))
+    },
+  }
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: storage,
+  })
+}

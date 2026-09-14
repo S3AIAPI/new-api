@@ -27,6 +27,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { getLobeIcon } from '@/lib/lobe-icon'
+import { resolveModelProvider } from '@/lib/model-provider'
 import { cn } from '@/lib/utils'
 
 interface ModelBadgeProps {
@@ -43,10 +44,20 @@ function ModelBadgeContent(props: ModelBadgeProps) {
   const configuredIcon = props.modelIcon
     ? getLobeIcon(props.modelIcon, 18)
     : null
-  const providerIcon = props.providerIcon
+  const configuredProviderIcon = props.providerIcon
     ? getLobeIcon(props.providerIcon, 18)
     : null
-  const displayIcon = configuredIcon || providerIcon
+  const provider = resolveModelProvider(props.modelName)
+  const detectedProviderIcon = provider?.icon
+    ? getLobeIcon(provider.icon, 18)
+    : null
+  const displayIcon = configuredIcon || configuredProviderIcon || detectedProviderIcon
+  const displayIconLabel =
+    props.modelIcon ||
+    props.providerIcon ||
+    provider?.label ||
+    provider?.name ||
+    props.modelName
 
   return (
     <StatusBadge
@@ -71,10 +82,8 @@ function ModelBadgeContent(props: ModelBadgeProps) {
         {displayIcon && (
           <span
             className='flex h-[18px] w-[18px] shrink-0 items-center justify-center'
-            title={props.modelIcon || props.providerIcon || props.modelName}
-            aria-label={
-              props.modelIcon || props.providerIcon || props.modelName
-            }
+            title={displayIconLabel}
+            aria-label={displayIconLabel}
           >
             {displayIcon}
           </span>

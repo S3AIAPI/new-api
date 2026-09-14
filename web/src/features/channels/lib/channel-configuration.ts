@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { FieldErrors, FieldPath } from 'react-hook-form'
 
 import {
+  CHANNEL_TYPE_OLLAMA,
   CLAUDE_FIELD_PASSTHROUGH_TYPES,
   CHANNEL_TYPE_AGNES,
   MODEL_FETCHABLE_TYPES,
@@ -63,6 +64,8 @@ const CONFIGURATION_BLOCKS = {
       'simulate_remote_compact_v2',
       'pass_through_body_enabled',
       'proxy_image_urls',
+      'responses_websocket_enabled',
+      'ollama_openai_chat',
       'system_prompt',
       'system_prompt_override',
     ],
@@ -163,6 +166,9 @@ export function getChannelConfigurationState(
       values.simulate_remote_compact_v2 ||
       values.pass_through_body_enabled ||
       ((values.type === 1 || values.type === 24) && values.proxy_image_urls) ||
+      ((values.type === 1 || values.type === 57) &&
+        values.responses_websocket_enabled) ||
+      (values.type === CHANNEL_TYPE_OLLAMA && values.ollama_openai_chat) ||
       values.system_prompt?.trim() ||
       values.system_prompt_override
     ),

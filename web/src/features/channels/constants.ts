@@ -21,6 +21,8 @@ For commercial licensing, please contact support@quantumnous.com
 // All label/name values are i18n keys; use t(value) when displaying.
 // ============================================================================
 
+export const CHANNEL_TYPE_OLLAMA = 4
+
 export const CHANNEL_TYPE_NEW_API = 62
 
 export const CHANNEL_TYPE_SUB2API = 61
@@ -28,6 +30,12 @@ export const CHANNEL_TYPE_SUB2API = 61
 export const CHANNEL_TYPE_AGNES = 63
 
 export const CHANNEL_TYPE_TASK_PLUGIN = 64
+
+// Keep the fork's persisted channel IDs stable; upstream-added types use the
+// next available IDs.
+export const CHANNEL_TYPE_VLLM = 65
+
+export const CHANNEL_TYPE_SGLANG = 66
 
 export const CHANNEL_TYPES = {
   0: 'Unknown',
@@ -91,6 +99,8 @@ export const CHANNEL_TYPES = {
   62: 'New API',
   63: 'Agnes',
   64: 'Task Plugin',
+  65: 'vLLM',
+  66: 'SGLang',
 } as const
 
 export type ChannelProviderPresentation = {
@@ -173,6 +183,12 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
     descriptionKey: 'Connect to model services from another New API instance',
   },
   63: { descriptionKey: 'Connect to Agnes multimodal model services' },
+  [CHANNEL_TYPE_VLLM]: {
+    descriptionKey: 'Connect to self-hosted models served by vLLM',
+  },
+  [CHANNEL_TYPE_SGLANG]: {
+    descriptionKey: 'Connect to self-hosted models served by SGLang',
+  },
 } satisfies Record<
   Exclude<keyof typeof CHANNEL_TYPES, 0 | typeof CHANNEL_TYPE_TASK_PLUGIN>,
   ChannelProviderPresentation
@@ -181,7 +197,8 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
   1, 14, 33, 24, 43, 3, 41, 48, 62, 58, 42, 34, 20, 4, 40, 27, 25, 17, 26, 15,
   46, 23, 18, 45, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 59, 22, 21, 44, 2,
-  5, 36, 50, 51, 52, 53, 54, 55, 56, 60, 61, 63, 64,
+  5, 36, 50, 51, 52, 53, 54, 55, 56, 60, 61, 63, 64, CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ]
 
 export const CHANNEL_TYPE_OPTIONS: { value: number; label: string }[] = (() => {
@@ -494,8 +511,32 @@ export const FIELD_DESCRIPTIONS = {
 // ============================================================================
 
 export const MODEL_FETCHABLE_TYPES = new Set([
-  1, 4, 14, 17, 20, 23, 24, 25, 26, 27, 31, 34, 35, 40, 42, 43, 47, 48, 57, 58,
-  59, 60, 62, 63,
+  1,
+  4,
+  14,
+  17,
+  20,
+  23,
+  24,
+  25,
+  26,
+  27,
+  31,
+  34,
+  35,
+  40,
+  42,
+  43,
+  47,
+  48,
+  57,
+  58,
+  59,
+  60,
+  CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_AGNES,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ])
 
 export const FIELD_PASSTHROUGH_TYPES = new Set([
@@ -505,6 +546,8 @@ export const FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ])
 
 export const OPENAI_FIELD_PASSTHROUGH_TYPES = new Set([
@@ -513,6 +556,8 @@ export const OPENAI_FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ])
 
 export const CLAUDE_FIELD_PASSTHROUGH_TYPES = new Set([
@@ -520,6 +565,8 @@ export const CLAUDE_FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ])
 
 export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
@@ -534,6 +581,8 @@ export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
   59: 'Enter API key for this channel',
   60: 'Enter API key for this channel',
   62: 'Enter API key for this channel',
+  [CHANNEL_TYPE_VLLM]: 'vLLM API key, or EMPTY if authentication is disabled',
+  [CHANNEL_TYPE_SGLANG]: 'SGLang API key, or EMPTY if authentication is disabled',
 }
 
 export const CHANNEL_TYPE_WARNINGS: Record<number, string> = {

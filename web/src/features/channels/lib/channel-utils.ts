@@ -21,6 +21,12 @@ import { formatTimestampToDate } from '@/lib/format'
 
 import {
   CHANNEL_STATUS_CONFIG,
+  CHANNEL_TYPE_AGNES,
+  CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_SGLANG,
+  CHANNEL_TYPE_SUB2API,
+  CHANNEL_TYPE_TASK_PLUGIN,
+  CHANNEL_TYPE_VLLM,
   CHANNEL_TYPES,
   MULTI_KEY_STATUS_CONFIG,
   RESPONSE_TIME_CONFIG,
@@ -52,8 +58,10 @@ export function getChannelTypeIcon(type: number): string {
     7: 'OpenAI', // OhMyGPT
     8: 'OpenAI', // Custom
     58: 'NewAPI', // Advanced Custom
-    61: 'Sub2API', // Sub2API
-    62: 'NewAPI', // New API
+    [CHANNEL_TYPE_SUB2API]: 'Sub2API', // Sub2API
+    [CHANNEL_TYPE_NEW_API]: 'NewAPI', // New API
+    [CHANNEL_TYPE_VLLM]: 'Vllm', // vLLM
+    [CHANNEL_TYPE_SGLANG]: 'SGLang', // SGLang
     3: 'Azure', // Azure
 
     // Anthropic
@@ -106,8 +114,8 @@ export function getChannelTypeIcon(type: number): string {
     56: 'Replicate', // Replicate
     59: 'Meshy', // Meshy2API
     60: 'OpenAI', // UnrealSpeech
-    63: 'AgnesAI', // Agnes
-    64: 'OpenAI', // Task Plugin
+    [CHANNEL_TYPE_AGNES]: 'AgnesAI', // Agnes
+    [CHANNEL_TYPE_TASK_PLUGIN]: 'OpenAI', // Task Plugin
 
     // Tools & Platforms
     37: 'Dify', // Dify

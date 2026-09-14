@@ -22,7 +22,10 @@ import {
   CLAUDE_FIELD_PASSTHROUGH_TYPES,
   CHANNEL_TYPE_AGNES,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_OLLAMA,
   CHANNEL_TYPE_TASK_PLUGIN,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
   CHANNEL_STATUS,
   ERROR_MESSAGES,
   FIELD_PASSTHROUGH_TYPES,
@@ -311,6 +314,7 @@ export const channelFormSchema = z
       .max(MAX_STREAM_FIRST_RESPONSE_TIMEOUT_SECONDS)
       .optional(),
     pass_through_body_enabled: z.boolean().optional(),
+    responses_websocket_enabled: z.boolean().optional(),
     system_prompt: z.string().optional(),
     system_prompt_override: z.boolean().optional(),
     // Type-specific settings (stored in settings JSON)
@@ -327,6 +331,7 @@ export const channelFormSchema = z
     allow_speed: z.boolean().optional(), // Anthropic: speed mode control
     claude_beta_query: z.boolean().optional(), // Anthropic: beta query passthrough
     claude_cache_control: z.boolean().optional(), // Anthropic: stable prefix cache control
+    ollama_openai_chat: z.boolean().optional(), // Ollama: OpenAI-compatible /v1/chat/completions instead of native /api/chat
     disable_task_polling_sleep: z.boolean().optional(),
     agnes_auto_image_url: z.boolean().optional(),
     // Upstream model update settings (stored in settings JSON)
@@ -336,9 +341,16 @@ export const channelFormSchema = z
   })
   .superRefine((data, ctx) => {
     if (
-      [3, 8, 36, 45, CHANNEL_TYPE_NEW_API, CHANNEL_TYPE_TASK_PLUGIN].includes(
-        data.type
-      ) &&
+      [
+        3,
+        8,
+        36,
+        45,
+        CHANNEL_TYPE_NEW_API,
+        CHANNEL_TYPE_TASK_PLUGIN,
+        CHANNEL_TYPE_VLLM,
+        CHANNEL_TYPE_SGLANG,
+      ].includes(data.type) &&
       !data.base_url?.trim()
     ) {
       addRequiredIssue(
@@ -504,6 +516,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   http2_connection_shards: 1,
   stream_first_response_timeout: 0,
   pass_through_body_enabled: false,
+  responses_websocket_enabled: false,
   system_prompt: '',
   system_prompt_override: false,
   // Type-specific settings
@@ -520,6 +533,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   allow_speed: false,
   claude_beta_query: false,
   claude_cache_control: false,
+  ollama_openai_chat: false,
   disable_task_polling_sleep: false,
   agnes_auto_image_url: false,
   upstream_model_update_check_enabled: false,
@@ -553,6 +567,7 @@ export function transformChannelToFormDefaults(
     http2_connection_shards: 1,
     stream_first_response_timeout: 0,
     pass_through_body_enabled: false,
+    responses_websocket_enabled: false,
     system_prompt: '',
     system_prompt_override: false,
   }
@@ -582,6 +597,8 @@ export function transformChannelToFormDefaults(
             ? parsed.stream_first_response_timeout
             : 0,
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
+        responses_websocket_enabled:
+          parsed.responses_websocket_enabled === true,
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
       }
@@ -604,6 +621,7 @@ export function transformChannelToFormDefaults(
   let allowSpeed = false
   let claudeBetaQuery = false
   let claudeCacheControl = false
+  let ollamaOpenAIChat = false
   let disableTaskPollingSleep = false
   let agnesAutoImageURL = false
   let upstreamModelUpdateCheckEnabled = false
@@ -626,6 +644,7 @@ export function transformChannelToFormDefaults(
       allowSpeed = parsed.allow_speed === true
       claudeBetaQuery = parsed.claude_beta_query === true
       claudeCacheControl = parsed.claude_cache_control === true
+      ollamaOpenAIChat = parsed.ollama_openai_chat === true
       disableTaskPollingSleep = parsed.disable_task_polling_sleep === true
       agnesAutoImageURL = parsed.agnes_auto_image_url === true
       upstreamModelUpdateCheckEnabled =
@@ -701,6 +720,7 @@ export function transformChannelToFormDefaults(
     allow_speed: allowSpeed,
     claude_beta_query: claudeBetaQuery,
     claude_cache_control: claudeCacheControl,
+    ollama_openai_chat: ollamaOpenAIChat,
     disable_task_polling_sleep: disableTaskPollingSleep,
     agnes_auto_image_url: agnesAutoImageURL,
     allow_safety_identifier: allowSafetyIdentifier,
@@ -733,6 +753,9 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
       formData.proxy_image_urls === true,
     proxy: formData.proxy?.trim() || '',
     pass_through_body_enabled: formData.pass_through_body_enabled || false,
+    responses_websocket_enabled:
+      (formData.type === 1 || formData.type === 57) &&
+      formData.responses_websocket_enabled === true,
     system_prompt: formData.system_prompt || '',
     system_prompt_override: formData.system_prompt_override || false,
   }
@@ -858,6 +881,13 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     if ('claude_cache_control' in settingsObj) {
       delete settingsObj.claude_cache_control
     }
+  }
+
+  // Only the Ollama adaptor can switch chat completions to the OpenAI-compatible endpoint.
+  if (formData.type === CHANNEL_TYPE_OLLAMA) {
+    settingsObj.ollama_openai_chat = formData.ollama_openai_chat === true
+  } else if ('ollama_openai_chat' in settingsObj) {
+    delete settingsObj.ollama_openai_chat
   }
 
   settingsObj.disable_task_polling_sleep =

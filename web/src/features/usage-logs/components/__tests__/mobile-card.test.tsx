@@ -213,6 +213,14 @@ it('retains the user avatar and model badge in the mobile summary', () => {
   expect(modelButton.querySelector('[data-slot="status-badge"]')).not.toBeNull()
 })
 
+it('uses the configured log model icon in the mobile model badge', () => {
+  renderLogs({
+    logs: [{ ...log, model_icon: 'Claude.Color' }],
+  })
+  const modelButton = screen.getByRole('button', { name: `Model: ${longName}` })
+  expect(modelButton).toContainElement(screen.getByLabelText('Claude.Color'))
+})
+
 it('omits unused token and throughput placeholders for async jobs', () => {
   renderLogs({
     logs: [

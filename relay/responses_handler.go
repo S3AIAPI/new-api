@@ -2,11 +2,9 @@ package relay
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -21,17 +19,6 @@ import (
 )
 
 func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
-	info.InitChannelMeta(c)
-	if info.RelayMode == relayconstant.RelayModeResponsesCompact &&
-		!common.SupportsResponsesCompact(info.ChannelType, info.ApiType) {
-		return types.NewErrorWithStatusCode(
-			fmt.Errorf("unsupported endpoint %q for api type %d", "/v1/responses/compact", info.ApiType),
-			types.ErrorCodeInvalidRequest,
-			http.StatusBadRequest,
-			types.ErrOptionWithSkipRetry(),
-		)
-	}
-
 	var responsesReq *dto.OpenAIResponsesRequest
 	switch req := info.Request.(type) {
 	case *dto.OpenAIResponsesRequest:
@@ -62,98 +49,34 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 		)
 	}
 
-	request, err := common.DeepCopy(responsesReq)
-	if err != nil {
-		return types.NewError(fmt.Errorf("failed to copy request to GeneralOpenAIRequest: %w", err), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
+	prepared, apiErr := prepareResponsesRequestInput(c, info, responsesReq)
+	if apiErr != nil {
+		return apiErr
 	}
-
-	err = helper.ModelMappedHelper(c, info, request)
-	if err != nil {
-		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
-	}
-	remoteCompactV2, err := helper.PrepareSimulatedRemoteCompactV2Request(request, info.ChannelSetting.SimulateRemoteCompactV2)
-	if err != nil {
-		return types.NewError(err, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry(), types.ErrOptionWithStatusCode(http.StatusBadRequest))
-	}
-	if remoteCompactV2.Simulating {
-		helper.EnableSimulatedRemoteCompactV2(c)
-	}
-
-	adaptor := GetAdaptor(info.ApiType)
-	if adaptor == nil {
-		return types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())
-	}
-	adaptor.Init(info)
-
-	passThroughGlobal := model_setting.GetGlobalSettings().PassThroughRequestEnabled
+	request := prepared.request
 	if info.RelayMode == relayconstant.RelayModeResponses &&
-		!remoteCompactV2.Modified &&
-		!passThroughGlobal && !info.ChannelSetting.PassThroughBodyEnabled &&
+		!prepared.remoteCompactV2Modified &&
+		!model_setting.GetGlobalSettings().PassThroughRequestEnabled &&
+		!info.ChannelSetting.PassThroughBodyEnabled &&
 		shouldUseResponsesChatCompletions(info) {
-		usage, newApiErr := responsesViaChatCompletions(c, info, request)
-		if newApiErr != nil {
-			return newApiErr
+		adaptor := GetAdaptor(info.ApiType)
+		if adaptor == nil {
+			return types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())
 		}
-		if strings.HasPrefix(info.OriginModelName, "gpt-4o-audio") {
-			service.PostAudioConsumeQuota(c, info, usage, "")
-		} else {
-			service.PostTextConsumeQuota(c, info, usage, nil)
+		adaptor.Init(info)
+		usage, downgradeErr := responsesViaChatCompletions(c, info, request)
+		if downgradeErr != nil {
+			return downgradeErr
 		}
+		ConsumeResponsesQuota(c, info, usage)
 		return nil
 	}
 
-	var requestBody io.Reader
-	if (model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled) && !remoteCompactV2.Modified {
-		storage, err := common.GetBodyStorage(c)
-		if err != nil {
-			return types.NewError(err, types.ErrorCodeReadRequestBodyFailed, types.ErrOptionWithSkipRetry())
-		}
-		var closer io.Closer
-		requestBody, closer, err = prepareMappedPassThroughBody(c, storage, info, true)
-		if err != nil {
-			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
-		}
-		if closer != nil {
-			defer closer.Close()
-		}
-	} else {
-		convertedRequest, err := adaptor.ConvertOpenAIResponsesRequest(c, info, *request)
-		if err != nil {
-			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
-		}
-		relaycommon.AppendRequestConversionFromRequest(info, convertedRequest)
-		jsonData, err := common.Marshal(convertedRequest)
-		if err != nil {
-			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
-		}
-
-		// remove disabled fields for OpenAI Responses API
-		jsonData, err = relaycommon.RemoveDisabledFields(jsonData, info.ChannelOtherSettings, info.ChannelSetting.PassThroughBodyEnabled)
-		if err != nil {
-			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
-		}
-
-		// apply param override
-		if len(info.ParamOverride) > 0 {
-			jsonData, err = relaycommon.ApplyParamOverrideWithRelayInfo(jsonData, info)
-			if err != nil {
-				return newAPIErrorFromParamOverride(err)
-			}
-		}
-		jsonData, err = applyClaudeCacheControl(info, jsonData)
-		if err != nil {
-			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
-		}
-
-		logger.LogDebug(c, "requestBody: %s", jsonData)
-		body, closer, err := relaycommon.NewOutboundJSONBody(jsonData)
-		if err != nil {
-			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
-		}
-		defer closer.Close()
-		jsonData = nil
-		requestBody = body
+	adaptor, requestBody, closer, apiErr := prepareResponsesRequestBody(c, info, prepared)
+	if apiErr != nil {
+		return apiErr
 	}
+	defer closer.Close()
 
 	var httpResp *http.Response
 	resp, err := adaptor.DoRequest(c, info, requestBody)
@@ -202,11 +125,7 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 		return nil
 	}
 
-	if strings.HasPrefix(info.OriginModelName, "gpt-4o-audio") {
-		service.PostAudioConsumeQuota(c, info, usageDto, "")
-	} else {
-		service.PostTextConsumeQuota(c, info, usageDto, nil)
-	}
+	ConsumeResponsesQuota(c, info, usageDto)
 	return nil
 }
 
@@ -218,4 +137,14 @@ func shouldUseResponsesChatCompletions(info *relaycommon.RelayInfo) bool {
 		return true
 	}
 	return service.ShouldResponsesUseChatCompletionsGlobal(info.ChannelId, info.ChannelType, info.OriginModelName)
+}
+
+// ConsumeResponsesQuota applies the same settlement dispatch to HTTP and
+// WebSocket Responses usage. Compact requests keep their separate repricing.
+func ConsumeResponsesQuota(c *gin.Context, info *relaycommon.RelayInfo, usage *dto.Usage) {
+	if strings.HasPrefix(info.OriginModelName, "gpt-4o-audio") {
+		service.PostAudioConsumeQuota(c, info, usage, "")
+		return
+	}
+	service.PostTextConsumeQuota(c, info, usage, nil)
 }

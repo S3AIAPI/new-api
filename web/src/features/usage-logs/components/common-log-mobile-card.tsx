@@ -149,6 +149,8 @@ export function CommonLogMobileCard<TData>(props: {
             <ModelBadge
               modelName={model.name}
               actualModel={model.actualModel}
+              modelIcon={log.model_icon}
+              providerIcon={log.provider_icon}
               wrapText
               onInspect={() => setSelectedField('model')}
             />

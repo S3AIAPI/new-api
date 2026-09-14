@@ -27,6 +27,26 @@ func TestChannelMatchesExpectedTaskPluginUsesGenericChannelSetting(t *testing.T)
 	assert.False(t, channelMatchesExpectedTaskPlugin(nil, channel, ""))
 }
 
+func TestChannelSupportsRequestPathUsesInferencePresets(t *testing.T) {
+	tests := []struct {
+		name        string
+		channelType int
+		path        string
+		want        bool
+	}{
+		{name: "vLLM chat route", channelType: constant.ChannelTypeVLLM, path: "/v1/chat/completions", want: true},
+		{name: "vLLM rejects SGLang rerank route", channelType: constant.ChannelTypeVLLM, path: "/v1/rerank", want: false},
+		{name: "SGLang rerank route", channelType: constant.ChannelTypeSGLang, path: "/v1/rerank", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			channel := &model.Channel{Type: tt.channelType}
+			assert.Equal(t, tt.want, channelSupportsRequestPath(channel, tt.path, "served-model"))
+		})
+	}
+}
+
 func TestChannelMatchesExpectedTaskPluginUsesPinnedLegacyIndex(t *testing.T) {
 	registry := jsplugin.NewRegistry()
 	alpha, err := registry.Register(distributorTaskPluginSource("legacy-alpha", constant.ChannelTypeKling), jsplugin.Options{})

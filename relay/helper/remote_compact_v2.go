@@ -182,19 +182,41 @@ func EnableSimulatedRemoteCompactV2(c *gin.Context) {
 }
 
 func interceptSimulatedRemoteCompactV2Stream(c *gin.Context, response dto.ResponsesStreamResponse, data string) (bool, error) {
+	handled, _, err := processSimulatedRemoteCompactV2Stream(c, response, data, func(resp dto.ResponsesStreamResponse, data string) error {
+		return writeResponsesChunkData(c, resp, data)
+	})
+	return handled, err
+}
+
+// HandleSimulatedRemoteCompactV2WebSocketEvent applies the same compaction
+// state machine as the HTTP SSE path, but returns WebSocket payloads instead
+// of writing through an HTTP response writer. The terminal flag tells the
+// caller whether the returned payloads complete this request.
+func HandleSimulatedRemoteCompactV2WebSocketEvent(c *gin.Context, response dto.ResponsesStreamResponse, data []byte) (handled bool, terminal bool, outputs [][]byte, err error) {
+	handled, terminal, err = processSimulatedRemoteCompactV2Stream(c, response, string(data), func(_ dto.ResponsesStreamResponse, emitted string) error {
+		outputs = append(outputs, []byte(emitted))
+		return nil
+	})
+	return handled, terminal, outputs, err
+}
+
+func processSimulatedRemoteCompactV2Stream(c *gin.Context, response dto.ResponsesStreamResponse, data string, emit func(dto.ResponsesStreamResponse, string) error) (handled bool, terminal bool, err error) {
 	if c == nil {
-		return false, nil
+		return false, false, nil
 	}
 	value, ok := c.Get(simulatedRemoteCompactV2StateKey)
 	if !ok {
-		return false, nil
+		return false, false, nil
 	}
 	state, ok := value.(*simulatedRemoteCompactV2Stream)
 	if !ok || state == nil {
-		return false, nil
+		return false, false, nil
 	}
 	if state.terminal {
-		return true, nil
+		return true, true, nil
+	}
+	if emit == nil {
+		emit = func(dto.ResponsesStreamResponse, string) error { return nil }
 	}
 	if response.Response == nil && response.Item == nil && response.Delta == "" && (response.Text == nil || *response.Text == "") && data != "" {
 		var parsed dto.ResponsesStreamResponse
@@ -214,7 +236,7 @@ func interceptSimulatedRemoteCompactV2Stream(c *gin.Context, response dto.Respon
 			state.model = response.Response.Model
 		}
 		if response.Response.CreatedAt != 0 {
-			state.createdAt = response.Response.CreatedAt
+			state.createdAt = int(response.Response.CreatedAt)
 		}
 		if response.Response.Usage != nil {
 			state.usage = response.Response.Usage
@@ -224,21 +246,21 @@ func interceptSimulatedRemoteCompactV2Stream(c *gin.Context, response dto.Respon
 	switch response.Type {
 	case "response.output_text.delta":
 		state.text.WriteString(response.Delta)
-		return true, nil
+		return true, false, nil
 	case "response.output_text.done":
 		if state.fallback.Len() == 0 {
 			if response.Text != nil {
 				state.fallback.WriteString(*response.Text)
 			}
 		}
-		return true, nil
+		return true, false, nil
 	case dto.ResponsesOutputTypeItemDone:
 		if response.Item != nil && state.fallback.Len() == 0 {
 			for _, content := range response.Item.Content {
 				state.fallback.WriteString(content.Text)
 			}
 		}
-		return true, nil
+		return true, false, nil
 	case "response.completed", "response.done":
 		if response.Response != nil && state.fallback.Len() == 0 {
 			for _, output := range response.Response.Output {
@@ -253,12 +275,20 @@ func interceptSimulatedRemoteCompactV2Stream(c *gin.Context, response dto.Respon
 			summary = state.fallback.String()
 		}
 		if strings.TrimSpace(summary) == "" {
-			return true, writeSimulatedRemoteCompactV2Failure(c, state, "upstream response did not contain a compaction summary")
+			failure, failureErr := simulatedRemoteCompactV2FailureData(c, state, "upstream response did not contain a compaction summary")
+			if failureErr != nil {
+				return true, true, failureErr
+			}
+			return true, true, emit(dto.ResponsesStreamResponse{Type: "response.failed"}, failure)
 		}
 
 		encryptedContent, err := dto.EncodeSimulatedRemoteCompactV2(summary)
 		if err != nil {
-			return true, writeSimulatedRemoteCompactV2Failure(c, state, err.Error())
+			failure, failureErr := simulatedRemoteCompactV2FailureData(c, state, err.Error())
+			if failureErr != nil {
+				return true, true, failureErr
+			}
+			return true, true, emit(dto.ResponsesStreamResponse{Type: "response.failed"}, failure)
 		}
 		responseID := state.responseID
 		if responseID == "" {
@@ -274,10 +304,10 @@ func interceptSimulatedRemoteCompactV2Stream(c *gin.Context, response dto.Respon
 			"item":         compactionItem,
 		})
 		if err != nil {
-			return true, err
+			return true, true, err
 		}
-		if err := writeResponsesChunkData(c, dto.ResponsesStreamResponse{Type: dto.ResponsesOutputTypeItemDone}, string(itemData)); err != nil {
-			return true, err
+		if err := emit(dto.ResponsesStreamResponse{Type: dto.ResponsesOutputTypeItemDone}, string(itemData)); err != nil {
+			return true, true, err
 		}
 
 		completedResponse := map[string]any{
@@ -300,14 +330,14 @@ func interceptSimulatedRemoteCompactV2Stream(c *gin.Context, response dto.Respon
 			"response": completedResponse,
 		})
 		if err != nil {
-			return true, err
+			return true, true, err
 		}
-		return true, writeResponsesChunkData(c, dto.ResponsesStreamResponse{Type: "response.completed"}, string(completedData))
+		return true, true, emit(dto.ResponsesStreamResponse{Type: "response.completed"}, string(completedData))
 	case "response.failed", "response.incomplete", "response.cancelled", "response.canceled", "error":
 		state.terminal = true
-		return false, nil
+		return false, true, nil
 	default:
-		return true, nil
+		return true, false, nil
 	}
 }
 
@@ -329,7 +359,35 @@ func FinalizeSimulatedRemoteCompactV2(c *gin.Context) error {
 	return writeSimulatedRemoteCompactV2Failure(c, state, "upstream stream ended before remote compaction completed")
 }
 
+// FinalizeSimulatedRemoteCompactV2WebSocket returns the synthetic failure
+// event needed when a simulated compaction stream ends without a terminal
+// Responses event.
+func FinalizeSimulatedRemoteCompactV2WebSocket(c *gin.Context) ([]byte, error) {
+	if c == nil {
+		return nil, nil
+	}
+	value, ok := c.Get(simulatedRemoteCompactV2StateKey)
+	if !ok {
+		return nil, nil
+	}
+	state, ok := value.(*simulatedRemoteCompactV2Stream)
+	if !ok || state == nil || state.terminal {
+		return nil, nil
+	}
+	state.terminal = true
+	data, err := simulatedRemoteCompactV2FailureData(c, state, "upstream stream ended before remote compaction completed")
+	return []byte(data), err
+}
+
 func writeSimulatedRemoteCompactV2Failure(c *gin.Context, state *simulatedRemoteCompactV2Stream, message string) error {
+	data, err := simulatedRemoteCompactV2FailureData(c, state, message)
+	if err != nil {
+		return err
+	}
+	return writeResponsesChunkData(c, dto.ResponsesStreamResponse{Type: "response.failed"}, data)
+}
+
+func simulatedRemoteCompactV2FailureData(c *gin.Context, state *simulatedRemoteCompactV2Stream, message string) (string, error) {
 	responseID := state.responseID
 	if responseID == "" {
 		responseID = GetResponseID(c)
@@ -354,7 +412,7 @@ func writeSimulatedRemoteCompactV2Failure(c *gin.Context, state *simulatedRemote
 		"response": response,
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
-	return writeResponsesChunkData(c, dto.ResponsesStreamResponse{Type: "response.failed"}, string(data))
+	return string(data), nil
 }

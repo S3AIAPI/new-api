@@ -152,6 +152,50 @@ func TestSimulatedRemoteCompactV2StreamEmitsCompatibleCompaction(t *testing.T) {
 	assert.Equal(t, 19, completedEvent.Response.Usage.TotalTokens)
 }
 
+func TestSimulatedRemoteCompactV2WebSocketEventReturnsCompatibleCompaction(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	c.Set(common.RequestIdKey, "remote-compact-v2-ws-test")
+	EnableSimulatedRemoteCompactV2(c)
+
+	handled, terminal, outputs, err := HandleSimulatedRemoteCompactV2WebSocketEvent(c, dto.ResponsesStreamResponse{
+		Type: "response.created",
+	}, []byte(`{"type":"response.created","response":{"id":"resp_ws","model":"upstream-model"}}`))
+	require.NoError(t, err)
+	assert.True(t, handled)
+	assert.False(t, terminal)
+	assert.Empty(t, outputs)
+
+	handled, terminal, outputs, err = HandleSimulatedRemoteCompactV2WebSocketEvent(c, dto.ResponsesStreamResponse{
+		Type:  "response.output_text.delta",
+		Delta: "summary over websocket",
+	}, []byte(`{"type":"response.output_text.delta","delta":"summary over websocket"}`))
+	require.NoError(t, err)
+	assert.True(t, handled)
+	assert.False(t, terminal)
+	assert.Empty(t, outputs)
+
+	handled, terminal, outputs, err = HandleSimulatedRemoteCompactV2WebSocketEvent(c, dto.ResponsesStreamResponse{
+		Type: "response.completed",
+	}, []byte(`{"type":"response.completed","response":{"id":"resp_ws","model":"upstream-model"}}`))
+	require.NoError(t, err)
+	assert.True(t, handled)
+	assert.True(t, terminal)
+	require.Len(t, outputs, 2)
+	assert.Contains(t, string(outputs[0]), `"type":"response.output_item.done"`)
+	assert.Contains(t, string(outputs[1]), `"type":"response.completed"`)
+
+	var completed struct {
+		Response struct {
+			Output []dto.ResponsesOutput `json:"output"`
+		} `json:"response"`
+	}
+	require.NoError(t, common.Unmarshal(outputs[1], &completed))
+	require.Len(t, completed.Response.Output, 1)
+	assert.Equal(t, "compaction", completed.Response.Output[0].Type)
+}
+
 func TestFinalizeSimulatedRemoteCompactV2MarksIncompleteStreamAsFailed(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
