@@ -7158,6 +7158,8 @@
     "Theme override": "Theme override",
     "Today awarded {{amount}}/{{limit}} quota": "Today awarded {{amount}}/{{limit}} quota",
     "Today checked in {{count}}/{{limit}} users": "Today checked in {{count}}/{{limit}} users",
-    "Total spending must reach {{quota}}.": "Total spending must reach {{quota}}."
+    "Total spending must reach {{quota}}.": "Total spending must reach {{quota}}.",
+    "Today's check-in user limit has been reached.": "Today's check-in user limit has been reached.",
+    "Today's remaining reward quota is below the maximum award.": "Today's remaining reward quota is below the maximum award."
   }
 }

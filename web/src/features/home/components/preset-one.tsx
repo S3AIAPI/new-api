@@ -112,7 +112,7 @@ export function PresetOne() {
   return (
     <PublicLayout
       showMainContainer={false}
-      headerProps={{ floating: true, animateFloatingEntrance: false }}
+      headerProps={{ floating: true, animateFloatingEntrance: true }}
     >
       <div
         data-motion-mode={shouldReduceMotion ? 'reduced' : 'full'}

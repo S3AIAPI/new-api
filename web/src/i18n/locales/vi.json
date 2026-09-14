@@ -7158,6 +7158,8 @@
     "Theme override": "Ghi đè giao diện",
     "Today awarded {{amount}}/{{limit}} quota": "Hạn ngạch đã phát hôm nay: {{amount}}/{{limit}}",
     "Today checked in {{count}}/{{limit}} users": "Đã điểm danh hôm nay: {{count}}/{{limit}} người",
-    "Total spending must reach {{quota}}.": "Tổng chi tiêu phải đạt {{quota}}."
+    "Total spending must reach {{quota}}.": "Tổng chi tiêu phải đạt {{quota}}.",
+    "Today's check-in user limit has been reached.": "Đã đạt giới hạn số người điểm danh hôm nay.",
+    "Today's remaining reward quota is below the maximum award.": "Hạn ngạch phần thưởng còn lại hôm nay thấp hơn mức thưởng tối đa."
   }
 }

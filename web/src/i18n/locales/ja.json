@@ -7158,6 +7158,8 @@
     "Theme override": "テーマの上書き",
     "Today awarded {{amount}}/{{limit}} quota": "本日の付与済みクォータ {{amount}}/{{limit}}",
     "Today checked in {{count}}/{{limit}} users": "本日のチェックイン {{count}}/{{limit}} 人",
-    "Total spending must reach {{quota}}.": "累計利用額が {{quota}} に達している必要があります。"
+    "Total spending must reach {{quota}}.": "累計利用額が {{quota}} に達している必要があります。",
+    "Today's check-in user limit has been reached.": "本日のチェックイン人数上限に達しました。",
+    "Today's remaining reward quota is below the maximum award.": "本日の残り報酬クォータが最大付与額を下回っています。"
   }
 }

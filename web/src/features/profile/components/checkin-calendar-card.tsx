@@ -158,6 +158,7 @@ export function CheckinCalendarCard({
     !dailyQuotaLimitMet &&
       t("Today's remaining reward quota is below the maximum award."),
   ].filter((condition): condition is string => Boolean(condition))
+  const remainingUnmetConditions = unmetConditions.slice(1)
   let checkinSummary = t('Check in daily to receive random quota rewards')
   if (!eligible && unmetConditions.length > 0) {
     checkinSummary = unmetConditions[0]
@@ -418,13 +419,15 @@ export function CheckinCalendarCard({
                 <p className='text-muted-foreground mt-1 line-clamp-2 text-xs sm:text-sm'>
                   {checkinSummary}
                 </p>
-                {!eligible && !checkedToday && unmetConditions.length > 0 && (
-                  <ul className='text-muted-foreground mt-2 list-disc space-y-0.5 pl-4 text-xs'>
-                    {unmetConditions.map((condition) => (
-                      <li key={condition}>{condition}</li>
-                    ))}
-                  </ul>
-                )}
+                {!eligible &&
+                  !checkedToday &&
+                  remainingUnmetConditions.length > 0 && (
+                    <ul className='text-muted-foreground mt-2 list-disc space-y-0.5 pl-4 text-xs'>
+                      {remainingUnmetConditions.map((condition) => (
+                        <li key={condition}>{condition}</li>
+                      ))}
+                    </ul>
+                  )}
                 {(checkinData?.daily_user_limit ?? 0) > 0 && (
                   <p className='text-muted-foreground mt-2 text-xs tabular-nums'>
                     {t('Today checked in {{count}}/{{limit}} users', {

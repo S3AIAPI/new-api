@@ -7158,6 +7158,8 @@
     "Theme override": "Переопределение темы",
     "Today awarded {{amount}}/{{limit}} quota": "Сегодня выдано квоты: {{amount}}/{{limit}}",
     "Today checked in {{count}}/{{limit}} users": "Сегодня отметились: {{count}}/{{limit}} пользователей",
-    "Total spending must reach {{quota}}.": "Общие расходы должны достигнуть {{quota}}."
+    "Total spending must reach {{quota}}.": "Общие расходы должны достигнуть {{quota}}.",
+    "Today's check-in user limit has been reached.": "Достигнут дневной лимит пользователей для отметки.",
+    "Today's remaining reward quota is below the maximum award.": "Оставшаяся сегодня квота вознаграждений ниже максимальной награды."
   }
 }

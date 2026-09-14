@@ -7158,6 +7158,8 @@
     "Theme override": "主题覆盖",
     "Today awarded {{amount}}/{{limit}} quota": "今日已发放 {{amount}}/{{limit}} 额度",
     "Today checked in {{count}}/{{limit}} users": "今日已签到 {{count}}/{{limit}} 人",
-    "Total spending must reach {{quota}}.": "累计消费必须达到 {{quota}}。"
+    "Total spending must reach {{quota}}.": "累计消费必须达到 {{quota}}。",
+    "Today's check-in user limit has been reached.": "今日签到人数已达到上限。",
+    "Today's remaining reward quota is below the maximum award.": "今日剩余奖励额度低于单次最大奖励。"
   }
 }

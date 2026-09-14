@@ -7158,6 +7158,8 @@
     "Theme override": "Remplacement du thème",
     "Today awarded {{amount}}/{{limit}} quota": "Crédits distribués aujourd'hui : {{amount}}/{{limit}}",
     "Today checked in {{count}}/{{limit}} users": "Participants inscrits aujourd'hui : {{count}}/{{limit}}",
-    "Total spending must reach {{quota}}.": "Les dépenses totales doivent atteindre {{quota}}."
+    "Total spending must reach {{quota}}.": "Les dépenses totales doivent atteindre {{quota}}.",
+    "Today's check-in user limit has been reached.": "La limite quotidienne de participants au check-in est atteinte.",
+    "Today's remaining reward quota is below the maximum award.": "Le quota de récompenses restant aujourd’hui est inférieur à la récompense maximale."
   }
 }
