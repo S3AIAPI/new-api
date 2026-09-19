@@ -129,7 +129,11 @@ export function getTopupPaymentMethods(
 }
 
 export interface PaymentProcessors {
-  regular: (topupAmount: number, paymentType: string) => Promise<boolean>
+  regular: (
+    topupAmount: number,
+    paymentType: string,
+    epayGateway?: string
+  ) => Promise<boolean>
   waffo: (topupAmount: number, payMethodIndex: number) => Promise<boolean>
   waffoPancake: (topupAmount: number) => Promise<boolean>
 }
@@ -151,7 +155,11 @@ export async function dispatchSelectedPayment(
     return processors.waffoPancake(topupAmount)
   }
 
-  return processors.regular(topupAmount, paymentMethod.type)
+  return processors.regular(
+    topupAmount,
+    paymentMethod.type,
+    paymentMethod.gateway
+  )
 }
 
 /**

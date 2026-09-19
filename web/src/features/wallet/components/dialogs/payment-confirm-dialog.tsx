@@ -67,8 +67,20 @@ export function PaymentConfirmDialog({
   amountDisplay,
 }: PaymentConfirmDialogProps) {
   const { t } = useTranslation()
-  const hasDiscount = discountRate > 0 && discountRate < 1 && paymentAmount > 0
-  const originalAmount = hasDiscount ? paymentAmount / discountRate : 0
+  const fixedFee = Number(paymentMethod?.fee) || 0
+  const feeRate = Number(paymentMethod?.fee_rate) || 0
+  const hasFee = fixedFee > 0 || feeRate > 0
+  const baseBeforeFee = hasFee
+    ? (paymentAmount - fixedFee) / (1 + feeRate / 100)
+    : paymentAmount
+  const feeAmount = hasFee ? paymentAmount - baseBeforeFee : 0
+  const hasDiscount = discountRate > 0 && discountRate < 1 && baseBeforeFee > 0
+  const originalBaseAmount = hasDiscount
+    ? baseBeforeFee / discountRate
+    : baseBeforeFee
+  const originalAmount = hasFee
+    ? originalBaseAmount * (1 + feeRate / 100) + fixedFee
+    : originalBaseAmount
   const discountAmount = hasDiscount ? originalAmount - paymentAmount : 0
 
   return (
@@ -126,6 +138,22 @@ export function PaymentConfirmDialog({
                   {formatCurrency(discountAmount)}
                 </span>
               </div>
+            </div>
+          )}
+
+          {hasFee && !calculating && (
+            <div className='bg-muted/50 rounded-lg p-3'>
+              <div className='flex items-center justify-between text-sm'>
+                <span className='text-muted-foreground'>
+                  {t('Payment fee')}
+                </span>
+                <span className='font-semibold'>
+                  {formatCurrency(feeAmount)}
+                </span>
+              </div>
+              <p className='text-muted-foreground mt-1 text-xs'>
+                {t('The payment fee is included in the total shown above.')}
+              </p>
             </div>
           )}
 

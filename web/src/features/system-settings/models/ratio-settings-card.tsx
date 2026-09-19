@@ -49,6 +49,7 @@ import { ToolPriceSettings } from './tool-price-settings'
 import { UpstreamRatioSync } from './upstream-ratio-sync'
 import {
   formatJsonForTextarea,
+  isModelSquareVisibleGroups,
   type JsonValidationError,
   normalizeJsonString,
   validateJsonString,
@@ -179,10 +180,9 @@ const createGroupSchema = (t: Translate) =>
       predicateMessage: 'Expected retry counts from 0 to 10 by group',
     }),
     ModelSquareVisibleGroups: createJsonStringField(t, {
-      predicate: (parsed) =>
-        Array.isArray(parsed) &&
-        parsed.every((item) => typeof item === 'string'),
-      predicateMessage: 'Expected a JSON array of group identifiers',
+      predicate: isModelSquareVisibleGroups,
+      predicateMessage:
+        'Expected a JSON array of group identifiers or an object mapping identifiers to descriptions',
     }),
   })
 

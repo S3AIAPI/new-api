@@ -129,7 +129,12 @@ export function NowPaymentsPaymentDialog(props: NowPaymentsPaymentDialogProps) {
         )}
       </div>
       <Alert>
-        <AlertDescription>{statusText}</AlertDescription>
+        <AlertDescription>
+          <span className='block font-medium'>
+            {t('You pay the network and payment fees.')}
+          </span>
+          <span className='mt-1 block'>{statusText}</span>
+        </AlertDescription>
       </Alert>
       {qrValue && (
         <div className='space-y-2'>
@@ -230,7 +235,7 @@ export function NowPaymentsPaymentDialog(props: NowPaymentsPaymentDialogProps) {
       )}
       <p className='text-muted-foreground text-xs'>
         {t(
-          'Send the exact amount to the address above. Payment is credited automatically after gateway confirmation.'
+          'Send the amount to the address above. If the confirmed amount is lower, your balance is credited proportionally.'
         )}{' '}
         {t('Invoice expires at {{time}}.', { time: expiresAt })}
       </p>

@@ -19,6 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, test, vi } from 'vitest'
 
+import {
+  calculateRedemptionPurchaseAmount,
+  requestRedemptionPurchase,
+} from '../../api'
 import type { TopupInfo } from '../../types'
 import { RedemptionPurchaseCard } from '../redemption-purchase-card'
 
@@ -33,7 +37,7 @@ vi.mock('../../api', () => ({
   })),
   isApiSuccess: (response: { success?: boolean }) => response.success === true,
   refundUserRedemption: vi.fn(),
-  requestRedemptionPurchase: vi.fn(),
+  requestRedemptionPurchase: vi.fn(async () => ({ success: true, data: {} })),
 }))
 
 const topupInfo: TopupInfo = {
@@ -48,12 +52,13 @@ const topupInfo: TopupInfo = {
   redemption_purchase_methods: ['alipay'],
 }
 
-function renderCard() {
+function renderCard(info = topupInfo) {
   return render(
     <RedemptionPurchaseCard
-      topupInfo={topupInfo}
+      topupInfo={info}
       presetAmounts={[{ value: 10 }, { value: 50 }]}
       onMoneroInvoice={() => undefined}
+      onNowPaymentsInvoice={() => undefined}
       onRefreshUser={() => undefined}
     />
   )
@@ -99,6 +104,51 @@ describe('redemption purchase layout', () => {
     expect(
       await screen.findByText('Review your payment details')
     ).toBeInTheDocument()
+  })
+
+  test('keeps the selected Epay gateway through quote and purchase', async () => {
+    vi.clearAllMocks()
+    renderCard({
+      ...topupInfo,
+      pay_methods: [
+        {
+          name: 'Primary Alipay',
+          type: 'alipay',
+          gateway: 'primary',
+          min_topup: 100,
+        },
+        {
+          name: 'Backup Alipay',
+          type: 'alipay',
+          gateway: 'backup',
+          min_topup: 10,
+        },
+      ],
+    })
+    fireEvent.change(screen.getByLabelText('Code denomination'), {
+      target: { value: '10' },
+    })
+
+    const backupButton = screen.getByRole('button', {
+      name: 'Backup Alipay',
+    })
+    await waitFor(() => expect(backupButton).not.toBeDisabled())
+    fireEvent.click(backupButton)
+
+    await waitFor(() =>
+      expect(calculateRedemptionPurchaseAmount).toHaveBeenCalledWith(
+        expect.objectContaining({ epay_gateway: 'backup' })
+      )
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Confirm Payment' })
+    )
+
+    await waitFor(() =>
+      expect(requestRedemptionPurchase).toHaveBeenCalledWith(
+        expect.objectContaining({ epay_gateway: 'backup' })
+      )
+    )
   })
 
   test('aligns the refresh action to the right on the mobile card header', async () => {

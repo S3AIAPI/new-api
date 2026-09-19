@@ -84,10 +84,10 @@ it('renders recent Uptime Kuma heartbeats as an accessible status strip', async 
     within(history).getByLabelText('Operational: 2026-09-13 10:00:00')
   ).toBeVisible()
   expect(
-    within(history).getByLabelText('Pending: 2026-09-13 10:01:00')
+    within(history).getByLabelText('Degraded: 2026-09-13 10:01:00')
   ).toBeVisible()
   expect(
-    within(history).getByLabelText('Unavailable: 2026-09-13 10:02:00')
+    within(history).getByLabelText('Down: 2026-09-13 10:02:00')
   ).toBeVisible()
   expect(api.get).toHaveBeenCalledWith('/api/uptime/status')
 })

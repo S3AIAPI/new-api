@@ -40,6 +40,7 @@ type NowPaymentsPayment struct {
 	PayAmount           string `json:"pay_amount" gorm:"type:varchar(64)"`
 	ActuallyPaidAmount  string `json:"actually_paid_amount" gorm:"type:varchar(64)"`
 	CreditedQuota       int    `json:"credited_quota"`
+	SettledQuota        int    `json:"settled_quota"`
 	PayAddress          string `json:"pay_address" gorm:"type:varchar(255)"`
 	PayinExtraID        string `json:"payin_extra_id" gorm:"type:varchar(255)"`
 	GatewayStatus       string `json:"gateway_status" gorm:"type:varchar(32);index"`
@@ -217,11 +218,15 @@ func SettleNowPaymentsTopUp(paymentID, gatewayStatus, actuallyPaid, payload, cal
 		if topUp.PaymentProvider != PaymentProviderNowPayments {
 			return ErrPaymentMethodMismatch
 		}
-		if payment.Status == NowPaymentsPaymentStatusSuccess && topUp.Status == common.TopUpStatusSuccess {
+		if payment.Status == NowPaymentsPaymentStatusSuccess && topUp.Status == common.TopUpStatusSuccess && payment.SettledQuota == 0 {
+			// Rows created before partial settlement tracking were already fully
+			// credited when marked successful.
 			alreadySettled = true
 			return nil
 		}
-		if payment.Status != NowPaymentsPaymentStatusPending || topUp.Status != common.TopUpStatusPending {
+		validPending := payment.Status == NowPaymentsPaymentStatusPending && topUp.Status == common.TopUpStatusPending
+		validIncrement := payment.Status == NowPaymentsPaymentStatusSuccess && topUp.Status == common.TopUpStatusSuccess
+		if !validPending && !validIncrement {
 			return ErrTopUpStatusInvalid
 		}
 		if payment.CreditedQuota <= 0 {
@@ -235,23 +240,42 @@ func SettleNowPaymentsTopUp(paymentID, gatewayStatus, actuallyPaid, payload, cal
 		if err != nil || !price.IsPositive() {
 			return errors.New("invalid NOWPayments price amount")
 		}
+		quotedCrypto, err := decimal.NewFromString(payment.PayAmount)
+		if err != nil || !quotedCrypto.IsPositive() {
+			return errors.New("invalid NOWPayments quoted crypto amount")
+		}
+		if topUp.IsRedemptionPurchase() && paid.LessThan(quotedCrypto) {
+			return errors.New("NOWPayments redemption payment is below the quoted amount")
+		}
+		ratio := paid.Div(quotedCrypto)
+		creditedQuotaDecimal := decimal.NewFromInt(int64(payment.CreditedQuota)).Mul(ratio)
+		targetQuota, err := common.WalletQuotaFromDecimalStrict(creditedQuotaDecimal)
+		if err != nil || targetQuota <= 0 {
+			return ErrInvalidTopUpQuota
+		}
+		quotaToAdd = targetQuota - payment.SettledQuota
+		if quotaToAdd <= 0 {
+			alreadySettled = true
+			return nil
+		}
 
 		now := common.GetTimestamp()
 		payment.GatewayStatus = gatewayStatus
 		payment.ActuallyPaidAmount = paid.String()
 		payment.IPNPayload = payload
 		payment.Status = NowPaymentsPaymentStatusSuccess
+		payment.SettledQuota = targetQuota
 		payment.SettledAt = now
 		if err := tx.Save(payment).Error; err != nil {
 			return err
 		}
-		topUp.Money = price.InexactFloat64()
+		topUp.Money = price.Mul(ratio).InexactFloat64()
 		topUp.CompleteTime = now
 		topUp.Status = common.TopUpStatusSuccess
 		if err := tx.Save(topUp).Error; err != nil {
 			return err
 		}
-		quotaToAdd, err = settleTopUp(tx, topUp, payment.CreditedQuota, nil)
+		_, err = settleTopUp(tx, topUp, quotaToAdd, nil)
 		return err
 	})
 	if err != nil {

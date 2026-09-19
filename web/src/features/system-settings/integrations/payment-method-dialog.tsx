@@ -43,6 +43,9 @@ const createPaymentMethodDialogSchema = (t: (key: string) => string) =>
     type: z.string().min(1, t('Payment type key is required')),
     icon: z.string().optional(),
     min_topup: z.string().optional(),
+    gateway: z.string().optional(),
+    fee: z.string().optional(),
+    fee_rate: z.string().optional(),
   })
 
 type PaymentMethodDialogFormValues = z.infer<
@@ -57,6 +60,9 @@ export type PaymentMethodData = {
   icon?: string
   min_topup?: string
   color?: string
+  gateway?: string
+  fee?: string
+  fee_rate?: string
 }
 
 type PaymentMethodDialogProps = {
@@ -120,6 +126,9 @@ export function PaymentMethodDialog({
       type: '',
       icon: '',
       min_topup: '',
+      gateway: '',
+      fee: '',
+      fee_rate: '',
     },
   })
 
@@ -132,6 +141,9 @@ export function PaymentMethodDialog({
         type: editData.type,
         icon: editData.icon ?? getDefaultIconName(editData.type),
         min_topup: editData.min_topup ?? '',
+        gateway: editData.gateway ?? '',
+        fee: editData.fee ?? '',
+        fee_rate: editData.fee_rate ?? '',
       })
     } else {
       form.reset({
@@ -139,6 +151,9 @@ export function PaymentMethodDialog({
         type: '',
         icon: '',
         min_topup: '',
+        gateway: '',
+        fee: '',
+        fee_rate: '',
       })
     }
   }, [editData, form, open])
@@ -154,6 +169,9 @@ export function PaymentMethodDialog({
     if (values.min_topup && values.min_topup.trim() !== '') {
       data.min_topup = values.min_topup
     }
+    if (values.gateway?.trim()) data.gateway = values.gateway.trim()
+    if (values.fee?.trim()) data.fee = values.fee.trim()
+    if (values.fee_rate?.trim()) data.fee_rate = values.fee_rate.trim()
     onSave(data)
     form.reset()
     onOpenChange(false)
@@ -205,6 +223,41 @@ export function PaymentMethodDialog({
               </FormItem>
             )}
           />
+
+          <div className='grid gap-4 sm:grid-cols-2'>
+            <FormField
+              control={form.control}
+              name='fee'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Fixed payment fee')}</FormLabel>
+                  <FormControl>
+                    <Input type='number' min='0' step='0.01' {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Added to the final payment amount.')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='fee_rate'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Payment fee rate (%)')}</FormLabel>
+                  <FormControl>
+                    <Input type='number' min='0' step='0.01' {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Percentage added to the final payment amount.')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
           <FormField
             control={form.control}

@@ -149,4 +149,28 @@ describe('payment dispatch', () => {
     expect(success).toBe(false)
     expect(called).toBe(false)
   })
+
+  test('keeps the selected Epay gateway through confirmation', async () => {
+    let selectedGateway: string | undefined
+    const success = await dispatchSelectedPayment(
+      {
+        name: 'Backup Alipay',
+        type: PAYMENT_TYPES.ALIPAY,
+        gateway: 'backup',
+      },
+      120,
+      null,
+      {
+        regular: async (_amount, _type, gateway) => {
+          selectedGateway = gateway
+          return true
+        },
+        waffo: async () => false,
+        waffoPancake: async () => false,
+      }
+    )
+
+    expect(success).toBe(true)
+    expect(selectedGateway).toBe('backup')
+  })
 })

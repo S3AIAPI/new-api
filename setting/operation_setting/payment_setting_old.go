@@ -50,10 +50,57 @@ func PayMethods2JsonString() string {
 }
 
 func ContainsPayMethod(method string) bool {
-	for _, payMethod := range PayMethods {
-		if payMethod["type"] == method {
-			return true
+	if len(EpayGateways) == 0 {
+		for _, payMethod := range PayMethods {
+			if payMethod["type"] == method {
+				return true
+			}
+		}
+	}
+	for _, gateway := range GetEpayGateways() {
+		for _, payMethod := range gateway.PayMethods {
+			if payMethod["type"] == method {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func GetPayMethod(method string) map[string]string {
+	return GetPayMethodForGateway(method, "")
+}
+
+func GetPayMethodForGateway(method, gatewayID string) map[string]string {
+	if len(EpayGateways) == 0 {
+		if gatewayID != "" && gatewayID != "default" {
+			return nil
+		}
+		for _, payMethod := range PayMethods {
+			if payMethod["type"] == method {
+				copy := make(map[string]string, len(payMethod)+1)
+				for key, value := range payMethod {
+					copy[key] = value
+				}
+				copy["gateway"] = "default"
+				return copy
+			}
+		}
+	}
+	for _, gateway := range GetEpayGateways() {
+		if gatewayID != "" && gateway.ID != gatewayID {
+			continue
+		}
+		for _, payMethod := range gateway.PayMethods {
+			if payMethod["type"] == method {
+				copy := make(map[string]string, len(payMethod))
+				for key, value := range payMethod {
+					copy[key] = value
+				}
+				copy["gateway"] = gateway.ID
+				return copy
+			}
+		}
+	}
+	return nil
 }

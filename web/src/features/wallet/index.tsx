@@ -200,7 +200,14 @@ export function Wallet(props: WalletProps) {
 
       // Calculate initial payment amount with default payment type
       const defaultPaymentType = getDefaultPaymentType(topupInfo)
-      calculatePaymentAmount(minTopup, defaultPaymentType)
+      const defaultPaymentMethod = topupInfo.pay_methods?.find(
+        (method) => method.type === defaultPaymentType
+      )
+      calculatePaymentAmount(
+        minTopup,
+        defaultPaymentType,
+        defaultPaymentMethod?.gateway
+      )
     }
   }, [topupInfo, calculatePaymentAmount])
 
@@ -219,18 +226,31 @@ export function Wallet(props: WalletProps) {
     return selectedPaymentMethod?.type || getDefaultPaymentType(topupInfo)
   }, [selectedPaymentMethod, topupInfo])
 
+  const getCurrentEpayGateway = useCallback(
+    () => selectedPaymentMethod?.gateway,
+    [selectedPaymentMethod]
+  )
+
   // Handle preset selection
   const handleSelectPreset = (preset: PresetAmount) => {
     setTopupAmount(preset.value)
     setSelectedPreset(preset.value)
-    calculatePaymentAmount(preset.value, getCurrentPaymentType())
+    calculatePaymentAmount(
+      preset.value,
+      getCurrentPaymentType(),
+      getCurrentEpayGateway()
+    )
   }
 
   // Handle topup amount change
   const handleTopupAmountChange = (amount: number) => {
     setTopupAmount(amount)
     setSelectedPreset(null)
-    calculatePaymentAmount(amount, getCurrentPaymentType())
+    calculatePaymentAmount(
+      amount,
+      getCurrentPaymentType(),
+      getCurrentEpayGateway()
+    )
   }
 
   // Handle payment method selection
@@ -263,7 +283,7 @@ export function Wallet(props: WalletProps) {
         return
       }
 
-      await calculatePaymentAmount(topupAmount, method.type)
+      await calculatePaymentAmount(topupAmount, method.type, method.gateway)
       setConfirmDialogOpen(true)
     } finally {
       setPaymentLoading(null)
@@ -535,6 +555,10 @@ export function Wallet(props: WalletProps) {
               onMoneroInvoice={(invoice) => {
                 setMoneroInvoice(invoice)
                 setMoneroDialogOpen(true)
+              }}
+              onNowPaymentsInvoice={(invoice) => {
+                setNowPaymentsInvoice(invoice)
+                setNowPaymentsDialogOpen(true)
               }}
               onRefreshUser={fetchUser}
             />

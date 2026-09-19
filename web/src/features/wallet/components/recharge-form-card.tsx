@@ -354,7 +354,10 @@ export function RechargeFormCard({
 
                       const button = (
                         <Button
-                          key={`${method.type}-${method.name}`}
+                          key={JSON.stringify([
+                            method.gateway ?? 'builtin',
+                            method.type,
+                          ])}
                           variant='outline'
                           onClick={() => onPaymentMethodSelect(method)}
                           disabled={disabled || !!paymentLoading}

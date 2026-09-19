@@ -29,6 +29,8 @@ type RedemptionPurchaseRequest struct {
 	Quantity       int    `json:"quantity"`
 	PaymentMethod  string `json:"payment_method"`
 	PayMethodIndex *int   `json:"pay_method_index"`
+	PayCurrency    string `json:"pay_currency"`
+	EpayGatewayID  string `json:"epay_gateway"`
 }
 
 type redemptionPurchaseContext struct {
@@ -62,8 +64,10 @@ func redemptionPurchasePaymentMethods() []string {
 		methods = append(methods, method)
 	}
 	if isEpayTopUpEnabled() {
-		for _, method := range operation_setting.PayMethods {
-			add(method["type"])
+		for _, gateway := range operation_setting.GetEpayGateways() {
+			for _, method := range gateway.PayMethods {
+				add(method["type"])
+			}
 		}
 	}
 	if isStripeTopUpEnabled() {
@@ -78,6 +82,9 @@ func redemptionPurchasePaymentMethods() []string {
 	if service.IsMoneroTopUpEnabled() {
 		add(model.PaymentMethodMonero)
 	}
+	if isNowPaymentsTopUpEnabled() {
+		add(model.PaymentMethodNowPayments)
+	}
 	return methods
 }
 
@@ -90,7 +97,7 @@ func isRedemptionPurchasePaymentMethodAvailable(method string) bool {
 	return false
 }
 
-func redemptionPurchaseMinAmount(method string) int64 {
+func redemptionPurchaseMinAmount(method, gatewayID string) int64 {
 	minAmount := getMinTopup()
 	switch method {
 	case model.PaymentMethodStripe:
@@ -101,17 +108,15 @@ func redemptionPurchaseMinAmount(method string) int64 {
 		return int64(setting.WaffoPancakeMinTopUp)
 	case model.PaymentMethodMonero:
 		return int64(operation_setting.MinTopUp)
+	case model.PaymentMethodNowPayments:
+		return int64(setting.NowPaymentsMinTopUp)
 	}
 
-	for _, configuredMethod := range operation_setting.PayMethods {
-		if configuredMethod["type"] != method {
-			continue
-		}
+	if configuredMethod := operation_setting.GetPayMethodForGateway(method, gatewayID); configuredMethod != nil {
 		configuredMin, err := strconv.ParseInt(configuredMethod["min_topup"], 10, 64)
 		if err == nil && configuredMin > minAmount {
 			minAmount = configuredMin
 		}
-		break
 	}
 
 	return minAmount
@@ -144,12 +149,19 @@ func validateRedemptionPurchase(c *gin.Context, req RedemptionPurchaseRequest) (
 	if !isRedemptionPurchasePaymentMethodAvailable(req.PaymentMethod) {
 		return nil, errors.New("支付方式未配置或不可用于购买兑换码")
 	}
+	switch req.PaymentMethod {
+	case model.PaymentMethodStripe, model.PaymentMethodWaffo, model.PaymentMethodWaffoPancake, model.PaymentMethodMonero, model.PaymentMethodNowPayments:
+	default:
+		if operation_setting.GetPayMethodForGateway(req.PaymentMethod, req.EpayGatewayID) == nil {
+			return nil, errors.New("支付方式与易支付网关不匹配")
+		}
+	}
 	unitAmount, err := normalizeRedemptionPurchaseAmount(req)
 	if err != nil {
 		return nil, err
 	}
 	total := unitAmount * int64(req.Quantity)
-	if minAmount := redemptionPurchaseMinAmount(req.PaymentMethod); minAmount > 0 && total < minAmount {
+	if minAmount := redemptionPurchaseMinAmount(req.PaymentMethod, req.EpayGatewayID); minAmount > 0 && total < minAmount {
 		return nil, fmt.Errorf("兑换码购买总额不能小于 %d", minAmount)
 	}
 	if maxAmount := getMaxTopUpAmount(); maxAmount > 0 && total > maxAmount {
@@ -186,8 +198,13 @@ func validateRedemptionPurchase(c *gin.Context, req RedemptionPurchaseRequest) (
 		// configured Pancake product price is a wallet-top-up option and is
 		// intentionally not reused for code purchases.
 		payMoney = getWaffoPancakePayMoney(total, group)
+	case model.PaymentMethodNowPayments:
+		payMoney, err = service.QuoteNowPaymentsPayMoney(total, group)
+		if err != nil {
+			return nil, err
+		}
 	default:
-		payMoney = getPayMoney(total, group)
+		payMoney = getEpayPayMoney(total, group, req.PaymentMethod, req.EpayGatewayID)
 	}
 	if payMoney < 0.01 || math.IsNaN(payMoney) || math.IsInf(payMoney, 0) {
 		return nil, errors.New("支付金额过低或无效")
@@ -266,13 +283,25 @@ func RequestRedemptionPurchase(c *gin.Context) {
 			return
 		}
 		common.ApiSuccess(c, invoice)
+	case model.PaymentMethodNowPayments:
+		invoice, invoiceErr := service.CreateNowPaymentsRedemptionInvoice(c.Request.Context(), ctx.User.Id, req.UnitAmount, req.Quantity, ctx.UnitQuota, ctx.PayMoney, req.PayCurrency)
+		if invoiceErr != nil {
+			common.ApiErrorMsg(c, invoiceErr.Error())
+			return
+		}
+		common.ApiSuccess(c, invoice)
 	default:
 		requestRedemptionEpayPurchase(c, ctx)
 	}
 }
 
 func requestRedemptionEpayPurchase(c *gin.Context, ctx *redemptionPurchaseContext) {
-	client := GetEpayClient()
+	gateway := epayGatewayForMethod(ctx.Request.PaymentMethod, ctx.Request.EpayGatewayID)
+	if gateway == nil {
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "支付方式不存在"})
+		return
+	}
+	client := getEpayClientForGateway(gateway.ID)
 	if client == nil {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "当前管理员未配置支付信息"})
 		return
@@ -295,7 +324,9 @@ func requestRedemptionEpayPurchase(c *gin.Context, ctx *redemptionPurchaseContex
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "拉起支付失败"})
 		return
 	}
-	if err := newRedemptionTopUp(ctx, tradeNo, model.PaymentProviderEpay, ctx.Total, ctx.PayMoney).Insert(); err != nil {
+	topUp := newRedemptionTopUp(ctx, tradeNo, model.PaymentProviderEpay, ctx.Total, ctx.PayMoney)
+	topUp.EpayGatewayID = gateway.ID
+	if err := topUp.Insert(); err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("创建兑换码订单失败 user_id=%d trade_no=%s error=%q", ctx.User.Id, tradeNo, err.Error()))
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "创建订单失败"})
 		return

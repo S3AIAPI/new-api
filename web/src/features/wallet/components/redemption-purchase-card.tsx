@@ -70,11 +70,13 @@ import {
 } from '../lib'
 import type {
   MoneroInvoice,
+  NowPaymentsInvoice,
   PaymentMethod,
   PresetAmount,
   TopupInfo,
   UserRedemption,
 } from '../types'
+import { NowPaymentsCurrencyDialog } from './dialogs/nowpayments-currency-dialog'
 import { PaymentConfirmDialog } from './dialogs/payment-confirm-dialog'
 
 const MAX_PURCHASE_COUNT = 100
@@ -86,6 +88,7 @@ interface RedemptionPurchaseCardProps {
   priceRatio?: number
   usdExchangeRate?: number
   onMoneroInvoice: (invoice: MoneroInvoice) => void
+  onNowPaymentsInvoice: (invoice: NowPaymentsInvoice) => void
   onRefreshUser: () => Promise<void> | void
 }
 
@@ -95,6 +98,7 @@ function getFallbackPaymentMethod(type: string): PaymentMethod {
     waffo: 'Waffo',
     waffo_pancake: 'Waffo Pancake',
     monero: 'Monero',
+    nowpayments: 'NOWPayments',
   }
   return { type, name: labels[type] || type }
 }
@@ -130,18 +134,19 @@ export function RedemptionPurchaseCard({
   priceRatio = 1,
   usdExchangeRate = 1,
   onMoneroInvoice,
+  onNowPaymentsInvoice,
   onRefreshUser,
 }: RedemptionPurchaseCardProps) {
   const { t } = useTranslation()
   const purchaseMethods = useMemo(() => {
     const allowed = topupInfo?.redemption_purchase_methods ?? []
-    return allowed
-      .map(
-        (type) =>
-          topupInfo?.pay_methods?.find((method) => method.type === type) ??
-          getFallbackPaymentMethod(type)
-      )
-      .filter((method) => method.type)
+    return allowed.flatMap((type) => {
+      const configured =
+        topupInfo?.pay_methods?.filter((method) => method.type === type) ?? []
+      return configured.length > 0
+        ? configured
+        : [getFallbackPaymentMethod(type)]
+    })
   }, [topupInfo?.pay_methods, topupInfo?.redemption_purchase_methods])
 
   const standardPurchaseMethods = useMemo(
@@ -158,6 +163,7 @@ export function RedemptionPurchaseCard({
   const [quantityText, setQuantityText] = useState('1')
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null)
   const [paymentMethod, setPaymentMethod] = useState(initialMethod)
+  const [epayGatewayID, setEpayGatewayID] = useState('')
   const [waffoMethodIndex, setWaffoMethodIndex] = useState<string | null>(
     waffoPayMethods.length > 0 ? '0' : null
   )
@@ -165,6 +171,9 @@ export function RedemptionPurchaseCard({
   const [calculating, setCalculating] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
+  const [nowPaymentsCurrencyDialogOpen, setNowPaymentsCurrencyDialogOpen] =
+    useState(false)
+  const [nowPaymentsCurrency, setNowPaymentsCurrency] = useState('')
   const [codes, setCodes] = useState<UserRedemption[]>([])
   const [codesPage, setCodesPage] = useState(1)
   const [codesTotal, setCodesTotal] = useState(0)
@@ -175,7 +184,9 @@ export function RedemptionPurchaseCard({
   const unitAmount = Number.parseInt(unitAmountText, 10) || 0
   const quantity = Number.parseInt(quantityText, 10) || 0
   const selectedMethod = purchaseMethods.find(
-    (method) => method.type === paymentMethod
+    (method) =>
+      method.type === paymentMethod &&
+      (!epayGatewayID || method.gateway === epayGatewayID)
   )
   const isWaffo = paymentMethod === 'waffo'
   const selectedWaffoMethod =
@@ -192,10 +203,17 @@ export function RedemptionPurchaseCard({
   const totalAmount = unitAmount > 0 && quantity > 0 ? unitAmount * quantity : 0
 
   useEffect(() => {
-    if (!purchaseMethods.some((method) => method.type === paymentMethod)) {
+    if (
+      !purchaseMethods.some(
+        (method) =>
+          method.type === paymentMethod &&
+          (!epayGatewayID || method.gateway === epayGatewayID)
+      )
+    ) {
       setPaymentMethod(initialMethod)
+      setEpayGatewayID('')
     }
-  }, [initialMethod, paymentMethod, purchaseMethods])
+  }, [epayGatewayID, initialMethod, paymentMethod, purchaseMethods])
 
   useEffect(() => {
     if (waffoPurchaseEnabled && waffoPayMethods.length > 0) {
@@ -248,19 +266,38 @@ export function RedemptionPurchaseCard({
   }, [loadCodes, topupInfo?.enable_redemption_purchase])
 
   const buildRequest = useCallback(
-    (methodType = paymentMethod, methodIndex = waffoMethodIndex) => ({
+    (
+      methodType = paymentMethod,
+      methodIndex = waffoMethodIndex,
+      gatewayID = epayGatewayID
+    ) => ({
       unit_amount: unitAmount,
       quantity,
       payment_method: methodType,
       ...(methodType === 'waffo' && methodIndex !== null
         ? { pay_method_index: Number.parseInt(methodIndex, 10) }
         : {}),
+      ...(methodType === 'nowpayments' && nowPaymentsCurrency
+        ? { pay_currency: nowPaymentsCurrency }
+        : {}),
+      ...(gatewayID ? { epay_gateway: gatewayID } : {}),
     }),
-    [paymentMethod, quantity, unitAmount, waffoMethodIndex]
+    [
+      epayGatewayID,
+      nowPaymentsCurrency,
+      paymentMethod,
+      quantity,
+      unitAmount,
+      waffoMethodIndex,
+    ]
   )
 
   const calculatePurchaseAmount = useCallback(
-    async (methodType: string, methodIndex: string | null) => {
+    async (
+      methodType: string,
+      methodIndex: string | null,
+      gatewayID = epayGatewayID
+    ) => {
       if (
         !methodType ||
         !Number.isSafeInteger(unitAmount) ||
@@ -276,7 +313,7 @@ export function RedemptionPurchaseCard({
       setCalculating(true)
       try {
         const response = await calculateRedemptionPurchaseAmount(
-          buildRequest(methodType, methodIndex)
+          buildRequest(methodType, methodIndex, gatewayID)
         )
         if (!isApiSuccess(response) || !response.data?.trim()) {
           setPaymentAmount(null)
@@ -291,7 +328,7 @@ export function RedemptionPurchaseCard({
         setCalculating(false)
       }
     },
-    [buildRequest, quantity, unitAmount]
+    [buildRequest, epayGatewayID, quantity, unitAmount]
   )
 
   useEffect(() => {
@@ -322,7 +359,11 @@ export function RedemptionPurchaseCard({
             name: selectedWaffoMethod.name,
             icon: selectedWaffoMethod.icon,
           }
-        : purchaseMethods.find((item) => item.type === methodType)
+        : purchaseMethods.find(
+            (item) =>
+              item.type === methodType &&
+              (!epayGatewayID || item.gateway === epayGatewayID)
+          )
 
     if (
       !Number.isSafeInteger(unitAmount) ||
@@ -366,6 +407,12 @@ export function RedemptionPurchaseCard({
       if (methodType === 'monero' && isRecord(response.data)) {
         setConfirmDialogOpen(false)
         onMoneroInvoice(response.data as unknown as MoneroInvoice)
+        return
+      }
+
+      if (methodType === 'nowpayments' && isRecord(response.data)) {
+        setConfirmDialogOpen(false)
+        onNowPaymentsInvoice(response.data as unknown as NowPaymentsInvoice)
         return
       }
 
@@ -423,6 +470,7 @@ export function RedemptionPurchaseCard({
     const nextMethodIndex =
       methodIndex === undefined ? waffoMethodIndex : String(methodIndex)
     setPaymentMethod(method.type)
+    setEpayGatewayID(method.gateway ?? '')
     if (methodIndex !== undefined) {
       setWaffoMethodIndex(nextMethodIndex)
     }
@@ -438,9 +486,21 @@ export function RedemptionPurchaseCard({
       return
     }
 
+    if (method.type === 'nowpayments') {
+      const currencies = topupInfo?.nowpayments_pay_currencies ?? []
+      if (currencies.length === 0) {
+        toast.error(t('No cryptocurrency payment currency is enabled'))
+        return
+      }
+      setNowPaymentsCurrency((current) => current || currencies[0])
+      setNowPaymentsCurrencyDialogOpen(true)
+      return
+    }
+
     const calculatedAmount = await calculatePurchaseAmount(
       method.type,
-      nextMethodIndex
+      nextMethodIndex,
+      method.gateway ?? ''
     )
     if (!calculatedAmount) {
       toast.error(t('Payment request failed'))
@@ -569,7 +629,7 @@ export function RedemptionPurchaseCard({
       : undefined
     const button = (
       <Button
-        key={method.type}
+        key={JSON.stringify([method.gateway ?? 'builtin', method.type])}
         type='button'
         variant='outline'
         onClick={() => void handlePaymentMethodSelect(method)}
@@ -581,10 +641,13 @@ export function RedemptionPurchaseCard({
         className={cn(
           'min-h-14 min-w-0 justify-start gap-2 rounded-lg px-3 py-2 text-left',
           paymentMethod === method.type &&
+            epayGatewayID === (method.gateway ?? '') &&
             'border-foreground bg-foreground/5 dark:border-foreground dark:bg-foreground/10'
         )}
       >
-        {calculating && paymentMethod === method.type ? (
+        {calculating &&
+        paymentMethod === method.type &&
+        epayGatewayID === (method.gateway ?? '') ? (
           <Loader2 className='h-4 w-4 animate-spin' />
         ) : (
           getPaymentIcon(method.type, 'h-4 w-4', method.icon, method.name)
@@ -603,7 +666,9 @@ export function RedemptionPurchaseCard({
     if (!belowMinimum) return button
 
     return (
-      <TooltipProvider key={method.type}>
+      <TooltipProvider
+        key={JSON.stringify([method.gateway ?? 'builtin', method.type])}
+      >
         <Tooltip>
           <TooltipTrigger render={button} />
           <TooltipContent>{disabledReason}</TooltipContent>
@@ -965,6 +1030,26 @@ export function RedemptionPurchaseCard({
             ? `${formatCurrency(totalAmount)} · ${quantity} ${t('codes')}`
             : '-'
         }
+      />
+      <NowPaymentsCurrencyDialog
+        open={nowPaymentsCurrencyDialogOpen}
+        onOpenChange={setNowPaymentsCurrencyDialogOpen}
+        currencies={topupInfo?.nowpayments_pay_currencies ?? []}
+        selectedCurrency={nowPaymentsCurrency}
+        onSelectedCurrencyChange={setNowPaymentsCurrency}
+        loading={calculating}
+        onConfirm={async () => {
+          const calculatedAmount = await calculatePurchaseAmount(
+            'nowpayments',
+            null
+          )
+          if (!calculatedAmount) {
+            toast.error(t('Payment request failed'))
+            return
+          }
+          setNowPaymentsCurrencyDialogOpen(false)
+          setConfirmDialogOpen(true)
+        }}
       />
     </TitledCard>
   )

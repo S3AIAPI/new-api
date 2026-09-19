@@ -118,6 +118,12 @@ const paymentSchema = z.object({
   }, 'Provide a valid callback URL starting with http:// or https://'),
   EpayId: z.string(),
   EpayKey: z.string(),
+  EpayGateways: z.string().superRefine((value, ctx) => {
+    const error = getJsonError(value, (parsed) => Array.isArray(parsed))
+    if (error) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: error })
+    }
+  }),
   Price: z.coerce.number().min(0),
   MinTopUp: z.coerce.number().min(0),
   CustomCallbackAddress: z
@@ -415,6 +421,7 @@ export function PaymentSettingsSection({
     defaultValues: {
       ...initialFormValues,
       PayMethods: formatJsonForEditor(initialFormValues.PayMethods),
+      EpayGateways: formatJsonForEditor(initialFormValues.EpayGateways),
       AmountOptions: formatJsonForEditor(initialFormValues.AmountOptions),
       AmountDiscount: formatJsonForEditor(initialFormValues.AmountDiscount),
       CreemProducts: formatJsonForEditor(initialFormValues.CreemProducts),
@@ -472,6 +479,7 @@ export function PaymentSettingsSection({
     form.reset({
       ...parsedDefaults,
       PayMethods: formatJsonForEditor(parsedDefaults.PayMethods),
+      EpayGateways: formatJsonForEditor(parsedDefaults.EpayGateways),
       AmountOptions: formatJsonForEditor(parsedDefaults.AmountOptions),
       AmountDiscount: formatJsonForEditor(parsedDefaults.AmountDiscount),
       CreemProducts: formatJsonForEditor(parsedDefaults.CreemProducts),
@@ -483,6 +491,7 @@ export function PaymentSettingsSection({
       PayAddress: removeTrailingSlash(values.PayAddress),
       EpayId: values.EpayId.trim(),
       EpayKey: values.EpayKey.trim(),
+      EpayGateways: values.EpayGateways.trim(),
       Price: values.Price,
       MinTopUp: values.MinTopUp,
       CustomCallbackAddress: removeTrailingSlash(values.CustomCallbackAddress),
@@ -550,6 +559,7 @@ export function PaymentSettingsSection({
       PayAddress: removeTrailingSlash(initialRef.current.PayAddress),
       EpayId: initialRef.current.EpayId.trim(),
       EpayKey: initialRef.current.EpayKey.trim(),
+      EpayGateways: initialRef.current.EpayGateways.trim(),
       Price: initialRef.current.Price,
       MinTopUp: initialRef.current.MinTopUp,
       CustomCallbackAddress: removeTrailingSlash(
@@ -636,6 +646,13 @@ export function PaymentSettingsSection({
 
     if (sanitized.EpayKey && sanitized.EpayKey !== initial.EpayKey) {
       updates.push({ key: 'EpayKey', value: sanitized.EpayKey })
+    }
+
+    if (
+      normalizeJsonForComparison(sanitized.EpayGateways) !==
+      normalizeJsonForComparison(initial.EpayGateways)
+    ) {
+      updates.push({ key: 'EpayGateways', value: sanitized.EpayGateways })
     }
 
     if (sanitized.Price !== initial.Price) {
@@ -1572,6 +1589,36 @@ export function PaymentSettingsSection({
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name='EpayGateways'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Epay gateways')}</FormLabel>
+                      <FormControl>
+                        <JsonCodeEditor
+                          value={field.value}
+                          onChange={field.onChange}
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          textareaRef={field.ref}
+                          placeholder='[{"id":"primary","name":"Primary Epay","address":"https://pay.example.com","merchant_id":"10001","key":"secret","enabled":true,"pay_methods":[{"name":"Alipay","type":"alipay","fee":"0.30","fee_rate":"1.5"}]}]'
+                          heightClassName='h-72 min-h-72 max-h-72'
+                          aria-invalid={Boolean(
+                            form.formState.errors.EpayGateways
+                          )}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Configure multiple Epay providers and their payment methods. fee is a fixed charge and fee_rate is a percentage. Legacy Epay settings are migrated automatically to the first provider.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
             </TabsContent>
 

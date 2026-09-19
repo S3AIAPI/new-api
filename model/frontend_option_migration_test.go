@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -177,4 +178,49 @@ func TestRetiredThemeOptionIsPersistedButNotPublished(t *testing.T) {
 	assert.Equal(t, "default", requireOptionValue(t, db, retiredThemeOptionKey))
 	_, published := common.OptionMap[retiredThemeOptionKey]
 	assert.False(t, published)
+}
+
+func TestLoadOptionsMigratesLegacyEpaySettingsOnce(t *testing.T) {
+	db := useFrontendOptionMigrationDB(t)
+	previousMap := common.OptionMap
+	previousAddress := operation_setting.PayAddress
+	previousID := operation_setting.EpayId
+	previousKey := operation_setting.EpayKey
+	previousMethods := operation_setting.PayMethods
+	previousGateways := operation_setting.EpayGateways
+	t.Cleanup(func() {
+		common.OptionMap = previousMap
+		operation_setting.PayAddress = previousAddress
+		operation_setting.EpayId = previousID
+		operation_setting.EpayKey = previousKey
+		operation_setting.PayMethods = previousMethods
+		operation_setting.EpayGateways = previousGateways
+	})
+
+	legacy := []Option{
+		{Key: "PayAddress", Value: "https://legacy-pay.example.com"},
+		{Key: "EpayId", Value: "legacy-id"},
+		{Key: "EpayKey", Value: "legacy-key"},
+		{Key: "PayMethods", Value: `[{"type":"alipay","name":"Alipay"}]`},
+	}
+	require.NoError(t, db.Create(&legacy).Error)
+	common.OptionMap = map[string]string{}
+	operation_setting.PayAddress = ""
+	operation_setting.EpayId = ""
+	operation_setting.EpayKey = ""
+	operation_setting.PayMethods = nil
+	operation_setting.EpayGateways = nil
+
+	loadOptionsFromDatabase()
+	require.Len(t, operation_setting.EpayGateways, 1)
+	assert.Equal(t, "default", operation_setting.EpayGateways[0].ID)
+	assert.Equal(t, "https://legacy-pay.example.com", operation_setting.EpayGateways[0].Address)
+	assert.Equal(t, "legacy-id", operation_setting.EpayGateways[0].MerchantID)
+	assert.Equal(t, "legacy-key", operation_setting.EpayGateways[0].Key)
+	assert.JSONEq(t, operation_setting.EpayGateways2JsonString(), requireOptionValue(t, db, "EpayGateways"))
+
+	loadOptionsFromDatabase()
+	var gatewayOptionCount int64
+	require.NoError(t, db.Model(&Option{}).Where("key = ?", "EpayGateways").Count(&gatewayOptionCount).Error)
+	assert.Equal(t, int64(1), gatewayOptionCount)
 }

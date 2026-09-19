@@ -22,6 +22,7 @@ import { toast } from 'sonner'
 import { describe, expect, test, vi } from 'vitest'
 
 import { GroupRatioForm } from '../group-ratio-form'
+import { isModelSquareVisibleGroups, validateJsonString } from '../utils'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -92,6 +93,15 @@ function TestForm(props: {
 }
 
 describe('group ratio save action', () => {
+  test('accepts descriptions for model-square-visible groups', () => {
+    expect(
+      validateJsonString(
+        JSON.stringify({ hidden: 'Assigned by administrators only' }),
+        { predicate: isModelSquareVisibleGroups }
+      ).valid
+    ).toBe(true)
+  })
+
   test('shows the hidden validation error instead of ignoring the click', async () => {
     render(
       <TestForm

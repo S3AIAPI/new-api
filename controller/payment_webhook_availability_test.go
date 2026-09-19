@@ -1,10 +1,18 @@
 package controller
 
 import (
+	"bytes"
+	"maps"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/Calcium-Ion/go-epay/epay"
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -142,18 +150,21 @@ func TestWaffoPancakeWebhookEnabledRequiresTopUpAndWebhookConfig(t *testing.T) {
 	require.False(t, isWaffoPancakeWebhookEnabled())
 }
 
-func TestEpayWebhookEnabledRequiresTopUpAndWebhookConfig(t *testing.T) {
+func TestEpayWebhookRemainsEnabledForExistingOrders(t *testing.T) {
 	confirmPaymentComplianceForTest(t)
 	originalPayAddress := operation_setting.PayAddress
 	originalEpayID := operation_setting.EpayId
 	originalEpayKey := operation_setting.EpayKey
 	originalPayMethods := operation_setting.PayMethods
+	originalEpayGateways := operation_setting.EpayGateways
 	t.Cleanup(func() {
 		operation_setting.PayAddress = originalPayAddress
 		operation_setting.EpayId = originalEpayID
 		operation_setting.EpayKey = originalEpayKey
 		operation_setting.PayMethods = originalPayMethods
+		operation_setting.EpayGateways = originalEpayGateways
 	})
+	operation_setting.EpayGateways = nil
 
 	operation_setting.PayAddress = "https://pay.example.com"
 	operation_setting.EpayId = "epay_id"
@@ -165,7 +176,173 @@ func TestEpayWebhookEnabledRequiresTopUpAndWebhookConfig(t *testing.T) {
 	require.True(t, isEpayWebhookEnabled())
 
 	operation_setting.PayMethods = nil
-	require.False(t, isEpayWebhookEnabled())
+	require.False(t, isEpayTopUpEnabled())
+	require.True(t, isEpayWebhookEnabled())
+
+	operation_setting.PayMethods = []map[string]string{{"type": "alipay"}}
+	operation_setting.EpayGateways = []operation_setting.EpayGateway{{
+		ID: "disabled", Address: "https://disabled.example.com", MerchantID: "id",
+		Key: "key", Enabled: false, PayMethods: operation_setting.PayMethods,
+	}}
+	require.False(t, isEpayTopUpEnabled())
+	require.True(t, isEpayWebhookEnabled())
+	require.Nil(t, operation_setting.GetEpayGateway(""))
+	require.NotNil(t, operation_setting.GetEpayGateway("disabled"))
+}
+
+func TestLegacyEpaySettingsMigrateToFirstGateway(t *testing.T) {
+	originalPayAddress := operation_setting.PayAddress
+	originalEpayID := operation_setting.EpayId
+	originalEpayKey := operation_setting.EpayKey
+	originalPayMethods := operation_setting.PayMethods
+	originalGateways := operation_setting.EpayGateways
+	t.Cleanup(func() {
+		operation_setting.PayAddress = originalPayAddress
+		operation_setting.EpayId = originalEpayID
+		operation_setting.EpayKey = originalEpayKey
+		operation_setting.PayMethods = originalPayMethods
+		operation_setting.EpayGateways = originalGateways
+	})
+
+	operation_setting.PayAddress = "https://legacy-pay.example.com"
+	operation_setting.EpayId = "legacy-id"
+	operation_setting.EpayKey = "legacy-key"
+	operation_setting.PayMethods = []map[string]string{{"type": "alipay", "name": "Alipay"}}
+	operation_setting.EpayGateways = nil
+
+	require.True(t, operation_setting.MigrateLegacyEpayGateway())
+	require.Len(t, operation_setting.EpayGateways, 1)
+	assert.Equal(t, "default", operation_setting.EpayGateways[0].ID)
+	assert.Equal(t, operation_setting.PayAddress, operation_setting.EpayGateways[0].Address)
+	assert.Equal(t, operation_setting.EpayId, operation_setting.EpayGateways[0].MerchantID)
+	assert.Equal(t, operation_setting.EpayKey, operation_setting.EpayGateways[0].Key)
+	assert.Equal(t, operation_setting.PayMethods, operation_setting.EpayGateways[0].PayMethods)
+	require.False(t, operation_setting.MigrateLegacyEpayGateway())
+}
+
+func TestEpayFeeUsesSelectedGateway(t *testing.T) {
+	previousGateways := operation_setting.EpayGateways
+	t.Cleanup(func() { operation_setting.EpayGateways = previousGateways })
+	operation_setting.EpayGateways = []operation_setting.EpayGateway{
+		{
+			ID: "primary", Address: "https://primary.example.com", MerchantID: "primary-id",
+			Key: "primary-key", Enabled: true,
+			PayMethods: []map[string]string{{"type": "alipay", "fee": "0", "fee_rate": "0"}},
+		},
+		{
+			ID: "backup", Address: "https://backup.example.com", MerchantID: "backup-id",
+			Key: "backup-key", Enabled: true,
+			PayMethods: []map[string]string{{"type": "alipay", "gateway": "primary", "fee": "0.5", "fee_rate": "10"}},
+		},
+	}
+
+	assert.InDelta(t, 10, applyEpayFee(10, "alipay", "primary"), 0.000001)
+	assert.InDelta(t, 11.5, applyEpayFee(10, "alipay", "backup"), 0.000001)
+	method := operation_setting.GetPayMethodForGateway("alipay", "backup")
+	require.NotNil(t, method)
+	assert.Equal(t, "backup", method["gateway"])
+	gateway := epayGatewayForMethod("alipay", "backup")
+	require.NotNil(t, gateway)
+	assert.Equal(t, "backup", gateway.ID)
+}
+
+func TestEpayCallbackRejectsTamperingAndOrderMismatch(t *testing.T) {
+	gateway := &operation_setting.EpayGateway{
+		ID: "secure", Address: "https://secure-pay.example.com",
+		MerchantID: "merchant-123", Key: "callback-secret", Enabled: true,
+	}
+	client, err := epay.NewClient(&epay.Config{
+		PartnerID: gateway.MerchantID,
+		Key:       gateway.Key,
+	}, gateway.Address)
+	require.NoError(t, err)
+
+	validParams := epay.GenerateParams(map[string]string{
+		"pid": gateway.MerchantID, "trade_no": "provider-1",
+		"out_trade_no": "order-1", "type": "alipay", "name": "Top up",
+		"money": "10.00", "trade_status": epay.StatusTradeSuccess,
+	}, gateway.Key)
+	verifyInfo, err := verifyEpayCallback(client, gateway, validParams)
+	require.NoError(t, err)
+	require.NoError(t, validateEpayCallbackOrder(gateway, verifyInfo, "order-1", "alipay", 10, "secure"))
+
+	tamperedParams := make(map[string]string, len(validParams))
+	maps.Copy(tamperedParams, validParams)
+	tamperedParams["money"] = "0.01"
+	_, err = verifyEpayCallback(client, gateway, tamperedParams)
+	require.ErrorContains(t, err, "signature")
+
+	underpaidParams := epay.GenerateParams(map[string]string{
+		"pid": gateway.MerchantID, "trade_no": "provider-2",
+		"out_trade_no": "order-1", "type": "alipay", "name": "Top up",
+		"money": "0.01", "trade_status": epay.StatusTradeSuccess,
+	}, gateway.Key)
+	underpaidInfo, err := verifyEpayCallback(client, gateway, underpaidParams)
+	require.NoError(t, err)
+	require.ErrorContains(t, validateEpayCallbackOrder(gateway, underpaidInfo, "order-1", "alipay", 10, "secure"), "amount does not match")
+
+	wrongMerchantParams := epay.GenerateParams(map[string]string{
+		"pid": "merchant-other", "trade_no": "provider-3",
+		"out_trade_no": "order-1", "type": "alipay", "name": "Top up",
+		"money": "10.00", "trade_status": epay.StatusTradeSuccess,
+	}, gateway.Key)
+	_, err = verifyEpayCallback(client, gateway, wrongMerchantParams)
+	require.ErrorContains(t, err, "merchant")
+
+	unsupportedSignatureType := maps.Clone(validParams)
+	unsupportedSignatureType["sign_type"] = "SHA256"
+	_, err = verifyEpayCallback(client, gateway, unsupportedSignatureType)
+	require.ErrorContains(t, err, "signature type")
+
+	missingProviderTradeNo := epay.GenerateParams(map[string]string{
+		"pid": gateway.MerchantID, "out_trade_no": "order-1",
+		"type": "alipay", "name": "Top up", "money": "10.00",
+		"trade_status": epay.StatusTradeSuccess,
+	}, gateway.Key)
+	missingTradeNoInfo, err := verifyEpayCallback(client, gateway, missingProviderTradeNo)
+	require.NoError(t, err)
+	require.ErrorContains(t, validateEpayCallbackOrder(gateway, missingTradeNoInfo, "order-1", "alipay", 10, "secure"), "provider trade number")
+
+	require.ErrorContains(t, validateEpayCallbackOrder(gateway, verifyInfo, "order-2", "alipay", 10, "secure"), "order does not match")
+	require.ErrorContains(t, validateEpayCallbackOrder(gateway, verifyInfo, "order-1", "wxpay", 10, "secure"), "payment method")
+	require.ErrorContains(t, validateEpayCallbackOrder(gateway, verifyInfo, "order-1", "alipay", 10, "other"), "gateway")
+}
+
+func TestUpdateOptionRejectsMaskedKeyForUnknownEpayGateway(t *testing.T) {
+	previousGateways := operation_setting.EpayGateways
+	t.Cleanup(func() { operation_setting.EpayGateways = previousGateways })
+	operation_setting.EpayGateways = []operation_setting.EpayGateway{{
+		ID: "existing", Name: "Existing", Address: "https://pay.example.com",
+		MerchantID: "merchant", Key: "secret", Enabled: true,
+	}}
+	gateways, err := common.Marshal([]operation_setting.EpayGateway{{
+		ID: "new", Name: "New", Address: "https://new-pay.example.com",
+		MerchantID: "merchant", Key: common.SensitiveOptionPlaceholder, Enabled: true,
+	}})
+	require.NoError(t, err)
+	requestBody, err := common.Marshal(map[string]string{
+		"key":   "EpayGateways",
+		"value": string(gateways),
+	})
+	require.NoError(t, err)
+
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Request = httptest.NewRequest(
+		http.MethodPut,
+		"/api/option/",
+		bytes.NewReader(requestBody),
+	)
+
+	UpdateOption(context)
+
+	var payload struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &payload))
+	assert.False(t, payload.Success)
+	assert.Equal(t, "masked Epay gateway key does not match an existing gateway", payload.Message)
 }
 
 func TestNowPaymentsWebhookEnabledRequiresCompleteConfiguration(t *testing.T) {

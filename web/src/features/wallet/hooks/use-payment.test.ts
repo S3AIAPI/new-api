@@ -20,8 +20,37 @@ import { describe, expect, test } from 'vitest'
 
 import { PAYMENT_TYPES } from '../constants'
 import { requestPaymentAmount } from './use-payment'
+import { normalizeTopupPaymentMethods } from './use-topup-info'
 
 describe('payment amount routing', () => {
+  test('preserves Epay gateway and fee metadata from top-up info', () => {
+    expect(
+      normalizeTopupPaymentMethods(
+        [
+          {
+            name: 'Backup Alipay',
+            type: 'alipay',
+            gateway: 'backup',
+            fee: '0.30',
+            fee_rate: '1.5',
+          },
+        ],
+        1
+      )
+    ).toEqual([
+      {
+        name: 'Backup Alipay',
+        type: 'alipay',
+        color: undefined,
+        icon: undefined,
+        gateway: 'backup',
+        fee: 0.3,
+        fee_rate: 1.5,
+        min_topup: 0,
+      },
+    ])
+  })
+
   test('uses the dedicated Waffo amount calculator', async () => {
     const calls: string[] = []
     const amount = await requestPaymentAmount(120, PAYMENT_TYPES.WAFFO, {
@@ -45,5 +74,30 @@ describe('payment amount routing', () => {
 
     expect(amount).toBe(18.75)
     expect(calls).toEqual(['waffo:120'])
+  })
+
+  test('sends the selected Epay gateway to the amount calculator', async () => {
+    let request: unknown
+    const amount = await requestPaymentAmount(
+      120,
+      'alipay',
+      {
+        regular: async (value) => {
+          request = value
+          return { success: true, data: '19.20' }
+        },
+        stripe: async () => ({ success: false }),
+        waffo: async () => ({ success: false }),
+        waffoPancake: async () => ({ success: false }),
+      },
+      'backup'
+    )
+
+    expect(amount).toBe(19.2)
+    expect(request).toEqual({
+      amount: 120,
+      payment_method: 'alipay',
+      epay_gateway: 'backup',
+    })
   })
 })

@@ -129,6 +129,9 @@ export function PaymentMethodsVisualEditor({
         typeof item.type === 'string' &&
         (!('icon' in item) || typeof item.icon === 'string') &&
         (!('min_topup' in item) || typeof item.min_topup === 'string') &&
+        (!('gateway' in item) || typeof item.gateway === 'string') &&
+        (!('fee' in item) || typeof item.fee === 'string') &&
+        (!('fee_rate' in item) || typeof item.fee_rate === 'string') &&
         (!('color' in item) || typeof item.color === 'string')
     )
   }, [value])

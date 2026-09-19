@@ -412,6 +412,7 @@ export type BillingSettings = {
   PayAddress: string
   EpayId: string
   EpayKey: string
+  EpayGateways: string
   Price: number
   MinTopUp: number
   CustomCallbackAddress: string
@@ -522,6 +523,7 @@ export type OperationsSettings = {
   'performance_setting.monitor_memory_threshold': number
   'performance_setting.monitor_disk_threshold': number
   'perf_metrics_setting.enabled': boolean
+  'perf_metrics_setting.exclude_upstream_400_errors': boolean
   'perf_metrics_setting.flush_interval': number
   'perf_metrics_setting.bucket_time': 'hour' | 'minute' | '5min'
   'perf_metrics_setting.retention_days': number

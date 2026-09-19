@@ -455,6 +455,7 @@ type SubscriptionOrder struct {
 	TradeNo         string `json:"trade_no" gorm:"unique;type:varchar(255);index"`
 	PaymentMethod   string `json:"payment_method" gorm:"type:varchar(50)"`
 	PaymentProvider string `json:"payment_provider" gorm:"type:varchar(50);default:''"`
+	EpayGatewayID   string `json:"epay_gateway_id" gorm:"type:varchar(100);index"`
 	Status          string `json:"status"`
 	CreateTime      int64  `json:"create_time"`
 	CompleteTime    int64  `json:"complete_time"`
@@ -1002,6 +1003,7 @@ func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
 				TradeNo:         order.TradeNo,
 				PaymentMethod:   order.PaymentMethod,
 				PaymentProvider: order.PaymentProvider,
+				EpayGatewayID:   order.EpayGatewayID,
 				CreateTime:      order.CreateTime,
 				CompleteTime:    now,
 				Status:          common.TopUpStatusSuccess,
@@ -1019,6 +1021,11 @@ func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
 	if topup.PaymentProvider == "" {
 		topup.PaymentProvider = order.PaymentProvider
 	} else if order.PaymentProvider != "" && topup.PaymentProvider != order.PaymentProvider {
+		return ErrPaymentMethodMismatch
+	}
+	if topup.EpayGatewayID == "" {
+		topup.EpayGatewayID = order.EpayGatewayID
+	} else if order.EpayGatewayID != "" && topup.EpayGatewayID != order.EpayGatewayID {
 		return ErrPaymentMethodMismatch
 	}
 	if topup.CreateTime == 0 {

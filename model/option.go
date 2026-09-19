@@ -127,6 +127,7 @@ func InitOptionMap() {
 	common.OptionMap["CustomCallbackAddress"] = ""
 	common.OptionMap["EpayId"] = ""
 	common.OptionMap["EpayKey"] = ""
+	common.OptionMap["EpayGateways"] = operation_setting.EpayGateways2JsonString()
 	common.OptionMap["Price"] = strconv.FormatFloat(operation_setting.Price, 'f', -1, 64)
 	common.OptionMap["USDExchangeRate"] = strconv.FormatFloat(operation_setting.USDExchangeRate, 'f', -1, 64)
 	common.OptionMap["MinTopUp"] = strconv.Itoa(operation_setting.MinTopUp)
@@ -263,11 +264,15 @@ func loadOptionsFromDatabase() {
 	defer passkeyOptionMutex.Unlock()
 	options, _ := AllOption()
 	hasPopupMode := false
+	hasEpayGateways := false
 	legacyDashboardPopupEnabled := false
 	passkeyOptions := make(map[string]string)
 	for _, option := range options {
 		if option.Key == "NoticePopupMode" {
 			hasPopupMode = true
+		}
+		if option.Key == "EpayGateways" {
+			hasEpayGateways = true
 		}
 		if option.Key == "NoticePopupOnDashboardEnabled" && option.Value == "true" {
 			legacyDashboardPopupEnabled = true
@@ -279,6 +284,19 @@ func loadOptionsFromDatabase() {
 		err := updateOptionMap(option.Key, option.Value)
 		if err != nil {
 			common.SysLog("failed to update option map: " + err.Error())
+		}
+	}
+	if !hasEpayGateways && operation_setting.MigrateLegacyEpayGateway() {
+		value := operation_setting.EpayGateways2JsonString()
+		common.OptionMap["EpayGateways"] = value
+		option := Option{Key: "EpayGateways"}
+		if err := DB.FirstOrCreate(&option, Option{Key: "EpayGateways"}).Error; err != nil {
+			common.SysLog("failed to create migrated Epay gateways option: " + err.Error())
+			return
+		}
+		option.Value = value
+		if err := DB.Save(&option).Error; err != nil {
+			common.SysLog("failed to persist migrated Epay gateways: " + err.Error())
 		}
 	}
 	applyPasskeyDomainOptions(passkeyOptions)
@@ -309,6 +327,9 @@ func validateOptionValue(key string, value string) error {
 	}
 	if key == operation_setting.ToolPriceOptionKey {
 		return operation_setting.ValidateToolPricesJSON(value)
+	}
+	if key == "EpayGateways" {
+		return operation_setting.ValidateEpayGatewaysJSON(value)
 	}
 	if key == "error_rewrite.enabled" {
 		_, err := strconv.ParseBool(value)
@@ -624,6 +645,8 @@ func updateOptionMap(key string, value string) (err error) {
 		operation_setting.EpayId = value
 	case "EpayKey":
 		operation_setting.EpayKey = value
+	case "EpayGateways":
+		err = operation_setting.UpdateEpayGatewaysByJsonString(value)
 	case "Price":
 		operation_setting.Price, _ = strconv.ParseFloat(value, 64)
 	case "USDExchangeRate":

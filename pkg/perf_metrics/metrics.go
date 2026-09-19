@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/http"
 	"sort"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	relaytypes "github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/perf_metrics_setting"
 )
 
@@ -61,6 +63,20 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens i
 		CachedTokens: cachedTokens,
 		InputTokens:  inputTokens,
 	})
+}
+
+func RecordRelayFailure(info *relaycommon.RelayInfo, relayErr *relaytypes.NewAPIError) {
+	if info == nil {
+		return
+	}
+	setting := perf_metrics_setting.GetSetting()
+	if setting.ExcludeUpstream400Errors && relayErr != nil && relayErr.GetUpstreamStatusCode() == http.StatusBadRequest {
+		if !info.IsChannelTest {
+			NoteStatusCheckPassiveActivity(info.UsingGroup)
+		}
+		return
+	}
+	RecordRelaySample(info, false, 0, nil)
 }
 
 func cacheTokenUsage(usage *dto.Usage) (int64, int64) {

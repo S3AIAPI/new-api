@@ -66,6 +66,7 @@ func setupNowPaymentsServiceTest(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(
 		&model.User{},
 		&model.TopUp{},
+		&model.Redemption{},
 		&model.SubscriptionPlan{},
 		&model.SubscriptionOrder{},
 		&model.UserSubscription{},
@@ -215,7 +216,7 @@ func TestNowPaymentsTopUpCreditsOnlyFinishedPaymentOnce(t *testing.T) {
 	assert.Equal(t, "finished", payment.GatewayStatus)
 }
 
-func TestNowPaymentsFinishedPaymentRejectsUnderpayment(t *testing.T) {
+func TestNowPaymentsPartialPaymentCreditsReceivedAmountProportionally(t *testing.T) {
 	setupNowPaymentsServiceTest(t)
 	topUp := &model.TopUp{
 		UserId:          992,
@@ -242,12 +243,75 @@ func TestNowPaymentsFinishedPaymentRejectsUnderpayment(t *testing.T) {
 	}
 	require.NoError(t, model.CreateNowPaymentsTopUp(topUp, payment))
 
-	payload := []byte(`{"payment_id":"underpaid-id","payment_status":"finished","pay_address":"bc1test","price_amount":10,"price_currency":"usd","pay_amount":0.001,"actually_paid":0.0005,"pay_currency":"btc","order_id":"nowpayments-underpaid"}`)
-	err := HandleNowPaymentsWebhook(payload, "127.0.0.1")
-	require.ErrorContains(t, err, "below the quoted amount")
+	payload := []byte(`{"payment_id":"underpaid-id","payment_status":"partially_paid","pay_address":"bc1test","price_amount":10,"price_currency":"usd","pay_amount":0.001,"actually_paid":0.0005,"pay_currency":"btc","order_id":"nowpayments-underpaid"}`)
+	require.NoError(t, HandleNowPaymentsWebhook(payload, "127.0.0.1"))
 	var user model.User
 	require.NoError(t, model.DB.First(&user, 992).Error)
-	assert.Zero(t, user.Quota)
+	assert.Equal(t, 2_500_000, user.Quota)
+	var settled model.TopUp
+	require.NoError(t, model.DB.Where("trade_no = ?", topUp.TradeNo).First(&settled).Error)
+	assert.Equal(t, common.TopUpStatusSuccess, settled.Status)
+	assert.Equal(t, 5.0, settled.Money)
+
+	wrongAmountPayload := []byte(`{"payment_id":"underpaid-id","payment_status":"wrong_amount","pay_address":"bc1test","price_amount":10,"price_currency":"usd","pay_amount":0.001,"actually_paid":0.0006,"pay_currency":"btc","order_id":"nowpayments-underpaid"}`)
+	require.NoError(t, HandleNowPaymentsWebhook(wrongAmountPayload, "127.0.0.1"))
+	require.NoError(t, model.DB.First(&user, 992).Error)
+	assert.Equal(t, 3_000_000, user.Quota)
+
+	finishedPayload := []byte(`{"payment_id":"underpaid-id","payment_status":"finished","pay_address":"bc1test","price_amount":10,"price_currency":"usd","pay_amount":0.001,"actually_paid":0.0008,"pay_currency":"btc","order_id":"nowpayments-underpaid"}`)
+	require.NoError(t, HandleNowPaymentsWebhook(finishedPayload, "127.0.0.1"))
+	require.NoError(t, model.DB.First(&user, 992).Error)
+	assert.Equal(t, 4_000_000, user.Quota)
+
+	overpaidPayload := []byte(`{"payment_id":"underpaid-id","payment_status":"finished","pay_address":"bc1test","price_amount":10,"price_currency":"usd","pay_amount":0.001,"actually_paid":0.0012,"pay_currency":"btc","order_id":"nowpayments-underpaid"}`)
+	require.NoError(t, HandleNowPaymentsWebhook(overpaidPayload, "127.0.0.1"))
+	require.NoError(t, model.DB.First(&user, 992).Error)
+	assert.Equal(t, 6_000_000, user.Quota)
+	require.NoError(t, HandleNowPaymentsWebhook(overpaidPayload, "127.0.0.1"))
+	require.NoError(t, model.DB.First(&user, 992).Error)
+	assert.Equal(t, 6_000_000, user.Quota)
+}
+
+func TestNowPaymentsRedemptionWaitsForFullPayment(t *testing.T) {
+	setupNowPaymentsServiceTest(t)
+	topUp := &model.TopUp{
+		UserId: 992, Amount: 2, Money: 2, TradeNo: "nowpayments-redemption",
+		PaymentMethod: model.PaymentMethodNowPayments, PaymentProvider: model.PaymentProviderNowPayments,
+		CreateTime: common.GetTimestamp(), Status: common.TopUpStatusPending,
+		OrderType: model.OrderTypeRedemption, RedemptionQuota: 500_000,
+		RedemptionCount: 2, RedemptionAmount: 1, RedemptionName: "Crypto code",
+	}
+	payment := &model.NowPaymentsPayment{
+		PaymentID: "redemption-payment-id", OrderID: topUp.TradeNo,
+		PayCurrency: "btc", PriceCurrency: "usd", PriceAmount: "2", PayAmount: "0.002",
+		CreditedQuota: 1, PayAddress: "bc1redemption", GatewayStatus: "waiting",
+		Status: model.NowPaymentsPaymentStatusPending, CreateTime: common.GetTimestamp(),
+	}
+	require.NoError(t, model.CreateNowPaymentsTopUp(topUp, payment))
+
+	partialPayload := []byte(`{"payment_id":"redemption-payment-id","payment_status":"partially_paid","pay_address":"bc1redemption","price_amount":2,"price_currency":"usd","pay_amount":0.002,"actually_paid":0.001,"pay_currency":"btc","order_id":"nowpayments-redemption"}`)
+	require.NoError(t, HandleNowPaymentsWebhook(partialPayload, "127.0.0.1"))
+	var redemptionCount int64
+	require.NoError(t, model.DB.Model(&model.Redemption{}).Count(&redemptionCount).Error)
+	assert.Zero(t, redemptionCount)
+	var pendingPayment model.NowPaymentsPayment
+	require.NoError(t, model.DB.Where("payment_id = ?", payment.PaymentID).First(&pendingPayment).Error)
+	assert.Equal(t, model.NowPaymentsPaymentStatusPending, pendingPayment.Status)
+
+	finishedPayload := []byte(`{"payment_id":"redemption-payment-id","payment_status":"finished","pay_address":"bc1redemption","price_amount":2,"price_currency":"usd","pay_amount":0.002,"actually_paid":0.002,"pay_currency":"btc","order_id":"nowpayments-redemption"}`)
+	require.NoError(t, HandleNowPaymentsWebhook(finishedPayload, "127.0.0.1"))
+	require.NoError(t, model.DB.Model(&model.Redemption{}).Count(&redemptionCount).Error)
+	assert.Equal(t, int64(2), redemptionCount)
+}
+
+func TestQuoteNowPaymentsPayMoneyUsesConfiguredCurrencyRate(t *testing.T) {
+	setupNowPaymentsServiceTest(t)
+	operation_setting.GetGeneralSetting().QuotaDisplayType = operation_setting.QuotaDisplayTypeCNY
+	setting.NowPaymentsUSDToCurrencyRate = 5
+
+	quote, err := QuoteNowPaymentsPayMoney(50, "default")
+	require.NoError(t, err)
+	assert.Equal(t, 10.0, quote)
 }
 
 func TestNowPaymentsSubscriptionCompletesAfterFinishedPayment(t *testing.T) {
@@ -288,13 +352,21 @@ func TestNowPaymentsSubscriptionCompletesAfterFinishedPayment(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "sub-payment-1", invoice.PaymentID)
 
+	underpaidPayload := []byte(fmt.Sprintf(`{"payment_id":"sub-payment-1","payment_status":"finished","pay_address":"0xsubscription","price_amount":12.5,"price_currency":"usd","pay_amount":0.0002,"actually_paid":0.0001,"pay_currency":"btc","order_id":%q}`, invoice.OrderID))
+	require.ErrorContains(t, HandleNowPaymentsWebhook(underpaidPayload, "127.0.0.1"), "below the quoted amount")
+	pendingOrder := model.GetSubscriptionOrderByTradeNo(invoice.OrderID)
+	require.NotNil(t, pendingOrder)
+	assert.Equal(t, common.TopUpStatusPending, pendingOrder.Status)
+	var subscriptionCount int64
+	require.NoError(t, model.DB.Model(&model.UserSubscription{}).Where("user_id = ? AND plan_id = ?", 992, plan.Id).Count(&subscriptionCount).Error)
+	assert.Zero(t, subscriptionCount)
+
 	payload := []byte(fmt.Sprintf(`{"payment_id":"sub-payment-1","payment_status":"finished","pay_address":"0xsubscription","price_amount":12.5,"price_currency":"usd","pay_amount":0.0002,"actually_paid":0.0002,"pay_currency":"btc","order_id":%q}`, invoice.OrderID))
 	require.NoError(t, HandleNowPaymentsWebhook(payload, "127.0.0.1"))
 
 	order := model.GetSubscriptionOrderByTradeNo(invoice.OrderID)
 	require.NotNil(t, order)
 	assert.Equal(t, common.TopUpStatusSuccess, order.Status)
-	var subscriptionCount int64
 	require.NoError(t, model.DB.Model(&model.UserSubscription{}).Where("user_id = ? AND plan_id = ?", 992, plan.Id).Count(&subscriptionCount).Error)
 	assert.Equal(t, int64(1), subscriptionCount)
 	var payment model.NowPaymentsPayment

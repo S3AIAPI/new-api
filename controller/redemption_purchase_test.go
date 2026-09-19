@@ -59,7 +59,7 @@ func TestRedemptionPurchaseMinAmountUsesConfiguredEpayMethodMinimum(t *testing.T
 		{"type": "wxpay", "min_topup": "3"},
 	}
 
-	assert.Equal(t, int64(20), redemptionPurchaseMinAmount("alipay"))
-	assert.Equal(t, int64(5), redemptionPurchaseMinAmount("wxpay"))
-	assert.Equal(t, int64(1), redemptionPurchaseMinAmount(model.PaymentMethodStripe))
+	assert.Equal(t, int64(20), redemptionPurchaseMinAmount("alipay", ""))
+	assert.Equal(t, int64(5), redemptionPurchaseMinAmount("wxpay", ""))
+	assert.Equal(t, int64(1), redemptionPurchaseMinAmount(model.PaymentMethodStripe, ""))
 }

@@ -55,6 +55,9 @@ import type { PlanRecord } from '../../types'
 interface PaymentMethod {
   type: string
   name?: string
+  gateway?: string
+  fee?: number
+  fee_rate?: number
 }
 
 interface Props {
@@ -87,7 +90,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
 
   useEffect(() => {
     if (props.open && props.epayMethods && props.epayMethods.length > 0) {
-      setSelectedEpayMethod(props.epayMethods[0].type)
+      setSelectedEpayMethod('0')
     } else if (!props.open) {
       setSelectedEpayMethod('')
     }
@@ -119,10 +122,13 @@ export function SubscriptionPurchaseDialog(props: Props) {
     props.enableOnlineTopUp && (props.epayMethods || []).length > 0
   const hasAnyPayment =
     hasStripe || hasCreem || hasWaffoPancake || hasEpay || hasNowPayments
+  const selectedEpayMethodConfig =
+    selectedEpayMethod === ''
+      ? undefined
+      : (props.epayMethods || [])[Number.parseInt(selectedEpayMethod, 10)]
   const selectedEpayMethodLabel =
-    (props.epayMethods || []).find((m) => m.type === selectedEpayMethod)
-      ?.name ||
-    selectedEpayMethod ||
+    selectedEpayMethodConfig?.name ||
+    selectedEpayMethodConfig?.type ||
     t('Select payment method')
   const totalAmount = Number(plan.total_amount || 0)
   const price = formatBillingCurrencyFromUSD(Number(plan.price_amount || 0), {
@@ -130,6 +136,14 @@ export function SubscriptionPurchaseDialog(props: Props) {
     digitsSmall: 2,
     abbreviate: false,
   })
+  const epayFixedFee = Math.max(0, Number(selectedEpayMethodConfig?.fee) || 0)
+  const epayFeeRate = Math.max(
+    0,
+    Number(selectedEpayMethodConfig?.fee_rate) || 0
+  )
+  const epayFee =
+    Number(plan.price_amount || 0) * (epayFeeRate / 100) + epayFixedFee
+  const epayTotal = Number(plan.price_amount || 0) + epayFee
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0
       ? currency.quotaPerUnit
@@ -217,7 +231,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
     /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
 
   const handlePayEpay = async () => {
-    if (!selectedEpayMethod) {
+    if (!selectedEpayMethodConfig) {
       toast.error(t('Please select a payment method'))
       return
     }
@@ -225,7 +239,8 @@ export function SubscriptionPurchaseDialog(props: Props) {
     try {
       const res = await paySubscriptionEpay({
         plan_id: plan.id,
-        payment_method: selectedEpayMethod,
+        payment_method: selectedEpayMethodConfig.type,
+        epay_gateway: selectedEpayMethodConfig.gateway,
       })
       if (res.message === 'success' && res.url) {
         const form = document.createElement('form')
@@ -479,37 +494,65 @@ export function SubscriptionPurchaseDialog(props: Props) {
                 </div>
               )}
               {hasEpay && (
-                <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
-                  <Select
-                    items={(props.epayMethods || []).map((m) => ({
-                      value: m.type,
-                      label: m.name || m.type,
-                    }))}
-                    value={selectedEpayMethod}
-                    onValueChange={(v) =>
-                      v !== null && setSelectedEpayMethod(v)
-                    }
-                    disabled={limitReached}
-                  >
-                    <SelectTrigger className='flex-1'>
-                      <SelectValue>{selectedEpayMethodLabel}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      <SelectGroup>
-                        {(props.epayMethods || []).map((m) => (
-                          <SelectItem key={m.type} value={m.type}>
-                            {m.name || m.type}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    onClick={handlePayEpay}
-                    disabled={paying || !selectedEpayMethod || limitReached}
-                  >
-                    {t('Pay')}
-                  </Button>
+                <div className='space-y-2'>
+                  {epayFee > 0 && (
+                    <div className='text-muted-foreground flex items-center justify-between gap-3 text-xs'>
+                      <span>
+                        {t('Payment fee')}:{' '}
+                        {formatBillingCurrencyFromUSD(epayFee, {
+                          digitsLarge: 2,
+                          digitsSmall: 2,
+                          abbreviate: false,
+                        })}
+                      </span>
+                      <span>
+                        {t('You Pay')}:{' '}
+                        {formatBillingCurrencyFromUSD(epayTotal, {
+                          digitsLarge: 2,
+                          digitsSmall: 2,
+                          abbreviate: false,
+                        })}
+                      </span>
+                    </div>
+                  )}
+                  <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
+                    <Select
+                      items={(props.epayMethods || []).map((m, index) => ({
+                        value: String(index),
+                        label: m.name || m.type,
+                      }))}
+                      value={selectedEpayMethod}
+                      onValueChange={(v) =>
+                        v !== null && setSelectedEpayMethod(v)
+                      }
+                      disabled={limitReached}
+                    >
+                      <SelectTrigger className='flex-1'>
+                        <SelectValue>{selectedEpayMethodLabel}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent alignItemWithTrigger={false}>
+                        <SelectGroup>
+                          {(props.epayMethods || []).map((m, index) => (
+                            <SelectItem
+                              key={JSON.stringify([
+                                m.gateway ?? 'legacy',
+                                m.type,
+                              ])}
+                              value={String(index)}
+                            >
+                              {m.name || m.type}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      onClick={handlePayEpay}
+                      disabled={paying || !selectedEpayMethod || limitReached}
+                    >
+                      {t('Pay')}
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

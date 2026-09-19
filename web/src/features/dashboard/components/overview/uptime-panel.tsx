@@ -47,8 +47,8 @@ const STATUS_COLOR_MAP: Record<number, string> = {
 const DEFAULT_STATUS_COLOR = 'bg-muted-foreground/40'
 const STATUS_LABEL_MAP: Record<number, string> = {
   1: 'Operational',
-  0: 'Unavailable',
-  2: 'Pending',
+  0: 'Down',
+  2: 'Degraded',
   3: 'Maintenance',
 }
 const EMPTY_HISTORY_LENGTH = 30

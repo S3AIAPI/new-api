@@ -184,6 +184,28 @@ func TestCompleteSubscriptionOrderWithPaymentAmountRecordsVerifiedPayment(t *tes
 	assert.InDelta(t, 12.34, topUp.Money, 0.000001)
 }
 
+func TestCompleteSubscriptionOrderPreservesEpayGatewayOnTopUp(t *testing.T) {
+	truncateTables(t)
+
+	insertUserForPaymentGuardTest(t, 253, 0)
+	plan := insertSubscriptionPlanForPaymentGuardTest(t, 352)
+	insertSubscriptionOrderForPaymentGuardTest(t, "epay-gateway-settled", 253, plan.Id, PaymentProviderEpay)
+	require.NoError(t, DB.Model(&SubscriptionOrder{}).
+		Where("trade_no = ?", "epay-gateway-settled").
+		Update("epay_gateway_id", "backup").Error)
+
+	require.NoError(t, CompleteSubscriptionOrder(
+		"epay-gateway-settled",
+		`{"trade_status":"TRADE_SUCCESS"}`,
+		PaymentProviderEpay,
+		PaymentProviderEpay,
+	))
+
+	topUp := GetTopUpByTradeNo("epay-gateway-settled")
+	require.NotNil(t, topUp)
+	assert.Equal(t, "backup", topUp.EpayGatewayID)
+}
+
 func TestExpireSubscriptionOrder_RejectsMismatchedPaymentProvider(t *testing.T) {
 	truncateTables(t)
 

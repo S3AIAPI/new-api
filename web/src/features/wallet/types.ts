@@ -81,6 +81,8 @@ export interface RedemptionPurchaseRequest {
   quantity: number
   payment_method: string
   pay_method_index?: number
+  pay_currency?: string
+  epay_gateway?: string
 }
 
 export interface UserRedemption {
@@ -192,6 +194,12 @@ export interface PaymentMethod {
   min_topup?: number
   /** Optional react-icons component name or safe icon URL */
   icon?: string
+  /** Epay gateway identifier for this method */
+  gateway?: string
+  /** Fixed fee charged to the payer in the configured payment currency */
+  fee?: number
+  /** Percentage fee charged to the payer */
+  fee_rate?: number
 }
 
 /**
@@ -290,6 +298,8 @@ export interface PaymentRequest {
   amount: number
   /** Payment method identifier */
   payment_method: string
+  /** Epay gateway identifier for methods shared by multiple providers */
+  epay_gateway?: string
 }
 
 /**
@@ -316,6 +326,9 @@ export interface WaffoPancakePaymentRequest {
 export interface AmountRequest {
   /** Topup amount to calculate */
   amount: number
+  /** Epay method used to include its configured fee */
+  payment_method?: string
+  epay_gateway?: string
 }
 
 /**

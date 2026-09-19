@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 type SubscriptionEpayPayRequest struct {
 	PlanId        int    `json:"plan_id"`
 	PaymentMethod string `json:"payment_method"`
+	EpayGatewayID string `json:"epay_gateway"`
 }
 
 func SubscriptionRequestEpay(c *gin.Context) {
@@ -45,7 +47,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		common.ApiErrorMsg(c, "套餐金额过低")
 		return
 	}
-	if !operation_setting.ContainsPayMethod(req.PaymentMethod) {
+	if operation_setting.GetPayMethodForGateway(req.PaymentMethod, req.EpayGatewayID) == nil {
 		common.ApiErrorMsg(c, "支付方式不存在")
 		return
 	}
@@ -78,19 +80,30 @@ func SubscriptionRequestEpay(c *gin.Context) {
 	tradeNo := fmt.Sprintf("%s%d", common.GetRandomString(6), time.Now().Unix())
 	tradeNo = fmt.Sprintf("SUBUSR%dNO%s", userId, tradeNo)
 
-	client := GetEpayClient()
+	gateway := epayGatewayForMethod(req.PaymentMethod, req.EpayGatewayID)
+	if gateway == nil {
+		common.ApiErrorMsg(c, "支付方式不存在")
+		return
+	}
+	client := getEpayClientForGateway(gateway.ID)
 	if client == nil {
 		common.ApiErrorMsg(c, "当前管理员未配置支付信息")
 		return
 	}
 
+	payMoney := applyEpayFee(plan.PriceAmount, req.PaymentMethod, req.EpayGatewayID)
+	if payMoney < 0.01 || math.IsNaN(payMoney) || math.IsInf(payMoney, 0) {
+		common.ApiErrorMsg(c, "套餐支付金额无效")
+		return
+	}
 	order := &model.SubscriptionOrder{
 		UserId:          userId,
 		PlanId:          plan.Id,
-		Money:           plan.PriceAmount,
+		Money:           payMoney,
 		TradeNo:         tradeNo,
 		PaymentMethod:   req.PaymentMethod,
 		PaymentProvider: model.PaymentProviderEpay,
+		EpayGatewayID:   gateway.ID,
 		CreateTime:      time.Now().Unix(),
 		Status:          common.TopUpStatusPending,
 	}
@@ -102,7 +115,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		Type:           req.PaymentMethod,
 		ServiceTradeNo: tradeNo,
 		Name:           fmt.Sprintf("SUB:%s", plan.Title),
-		Money:          strconv.FormatFloat(plan.PriceAmount, 'f', 2, 64),
+		Money:          strconv.FormatFloat(payMoney, 'f', 2, 64),
 		Device:         epay.PC,
 		NotifyUrl:      notifyUrl,
 		ReturnUrl:      returnUrl,
@@ -141,18 +154,29 @@ func SubscriptionEpayNotify(c *gin.Context) {
 		return
 	}
 
-	client := GetEpayClient()
+	gateway := epayGatewayForTradeNo(params["out_trade_no"])
+	if gateway == nil {
+		_, _ = c.Writer.Write([]byte("fail"))
+		return
+	}
+	client := getEpayClientForGateway(gateway.ID)
 	if client == nil {
 		_, _ = c.Writer.Write([]byte("fail"))
 		return
 	}
-	verifyInfo, err := client.Verify(params)
-	if err != nil || !verifyInfo.VerifyStatus {
+	verifyInfo, err := verifyEpayCallback(client, gateway, params)
+	if err != nil {
 		_, _ = c.Writer.Write([]byte("fail"))
 		return
 	}
 
 	if verifyInfo.TradeStatus != epay.StatusTradeSuccess {
+		_, _ = c.Writer.Write([]byte("fail"))
+		return
+	}
+	order := model.GetSubscriptionOrderByTradeNo(verifyInfo.ServiceTradeNo)
+	if order == nil || order.PaymentProvider != model.PaymentProviderEpay ||
+		validateEpayCallbackOrder(gateway, verifyInfo, order.TradeNo, order.PaymentMethod, order.Money, order.EpayGatewayID) != nil {
 		_, _ = c.Writer.Write([]byte("fail"))
 		return
 	}
@@ -196,17 +220,28 @@ func SubscriptionEpayReturn(c *gin.Context) {
 		return
 	}
 
-	client := GetEpayClient()
+	gateway := epayGatewayForTradeNo(params["out_trade_no"])
+	if gateway == nil {
+		c.Redirect(http.StatusFound, paymentReturnPath("/wallet?pay=fail"))
+		return
+	}
+	client := getEpayClientForGateway(gateway.ID)
 	if client == nil {
 		c.Redirect(http.StatusFound, paymentReturnPath("/wallet?pay=fail"))
 		return
 	}
-	verifyInfo, err := client.Verify(params)
-	if err != nil || !verifyInfo.VerifyStatus {
+	verifyInfo, err := verifyEpayCallback(client, gateway, params)
+	if err != nil {
 		c.Redirect(http.StatusFound, paymentReturnPath("/wallet?pay=fail"))
 		return
 	}
 	if verifyInfo.TradeStatus == epay.StatusTradeSuccess {
+		order := model.GetSubscriptionOrderByTradeNo(verifyInfo.ServiceTradeNo)
+		if order == nil || order.PaymentProvider != model.PaymentProviderEpay ||
+			validateEpayCallbackOrder(gateway, verifyInfo, order.TradeNo, order.PaymentMethod, order.Money, order.EpayGatewayID) != nil {
+			c.Redirect(http.StatusFound, paymentReturnPath("/wallet?pay=fail"))
+			return
+		}
 		LockOrder(verifyInfo.ServiceTradeNo)
 		defer UnlockOrder(verifyInfo.ServiceTradeNo)
 		if err := model.CompleteSubscriptionOrder(verifyInfo.ServiceTradeNo, common.GetJsonString(verifyInfo), model.PaymentProviderEpay, verifyInfo.Type); err != nil {

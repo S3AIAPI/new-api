@@ -93,6 +93,21 @@ func GetOptions(c *gin.Context) {
 			continue
 		}
 		value := common.Interface2String(v)
+		if k == "EpayGateways" {
+			rawValue := value
+			value = "[]"
+			var gateways []operation_setting.EpayGateway
+			if common.Unmarshal([]byte(rawValue), &gateways) == nil {
+				for i := range gateways {
+					if gateways[i].Key != "" {
+						gateways[i].Key = common.SensitiveOptionPlaceholder
+					}
+				}
+				if redacted, err := common.Marshal(gateways); err == nil {
+					value = string(redacted)
+				}
+			}
+		}
 		isPublicSiteKey := strings.HasSuffix(k, "SiteKey")
 		isSensitiveKey := !isPublicSiteKey && (k == "MoneroWalletRPCPassword" || strings.HasSuffix(k, "Token") ||
 			strings.HasSuffix(k, "Secret") ||
@@ -294,6 +309,33 @@ func UpdateOption(c *gin.Context) {
 	if option.Value == common.SensitiveOptionPlaceholder {
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
 		return
+	}
+	if option.Key == "EpayGateways" {
+		var gateways []operation_setting.EpayGateway
+		if err := common.Unmarshal([]byte(option.Value.(string)), &gateways); err != nil {
+			common.ApiErrorMsg(c, "invalid Epay gateway configuration")
+			return
+		}
+		existing := make(map[string]string)
+		for _, gateway := range operation_setting.EpayGateways {
+			existing[gateway.ID] = gateway.Key
+		}
+		for i := range gateways {
+			if gateways[i].Key == common.SensitiveOptionPlaceholder {
+				existingKey, exists := existing[gateways[i].ID]
+				if !exists || existingKey == "" {
+					common.ApiErrorMsg(c, "masked Epay gateway key does not match an existing gateway")
+					return
+				}
+				gateways[i].Key = existingKey
+			}
+		}
+		encoded, marshalErr := common.Marshal(gateways)
+		if marshalErr != nil {
+			common.ApiError(c, marshalErr)
+			return
+		}
+		option.Value = string(encoded)
 	}
 	switch option.Key {
 	case "EmailVerificationTemplate":

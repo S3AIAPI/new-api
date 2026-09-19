@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import i18next from 'i18next'
 import { Coins, CreditCard, Landmark } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { SiAlipay, SiWechat, SiStripe } from 'react-icons/si'
+import { SiAlipay, SiMonero, SiWechat, SiStripe } from 'react-icons/si'
 
 import { ReactIconByName } from '@/components/react-icon-by-name'
 
@@ -156,7 +156,7 @@ export function getPaymentIcon(
       )
     case PAYMENT_TYPES.MONERO:
       return (
-        <Coins
+        <SiMonero
           className={className}
           style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.MONERO] }}
         />
@@ -164,8 +164,8 @@ export function getPaymentIcon(
     case PAYMENT_TYPES.NOWPAYMENTS:
       return (
         <Coins
-          className={className}
-          style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.NOWPAYMENTS] }}
+          className={`${className} text-slate-900 dark:text-white`}
+          aria-label={altName || 'NOWPayments'}
         />
       )
     default:

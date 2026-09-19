@@ -341,6 +341,14 @@ func nowPaymentsTopUpQuote(amount int64, group string) (decimal.Decimal, int, er
 	return quote, quota, nil
 }
 
+func QuoteNowPaymentsPayMoney(amount int64, group string) (float64, error) {
+	quote, _, err := nowPaymentsTopUpQuote(amount, group)
+	if err != nil {
+		return 0, err
+	}
+	return quote.InexactFloat64(), nil
+}
+
 func CreateNowPaymentsTopUp(ctx context.Context, userID int, amount int64, payCurrency string) (*NowPaymentsInvoice, error) {
 	if !IsNowPaymentsTopUpEnabled() {
 		return nil, errors.New("NOWPayments top-up is not configured")
@@ -416,6 +424,75 @@ func CreateNowPaymentsTopUp(ctx context.Context, userID int, amount int64, payCu
 		Status:        model.NowPaymentsPaymentStatusPending,
 		ExpiresAt:     invoice.ExpiresAt,
 		CreateTime:    now,
+	}
+	if err := model.CreateNowPaymentsTopUp(topUp, payment); err != nil {
+		return nil, err
+	}
+	return invoice, nil
+}
+
+// CreateNowPaymentsRedemptionInvoice reuses the normal NOWPayments invoice
+// lifecycle while preserving redemption-code fulfillment metadata on the
+// linked TopUp row. Redemption purchases require full payment because a
+// partial payment cannot mint a fractional set of codes.
+func CreateNowPaymentsRedemptionInvoice(ctx context.Context, userID int, unitAmount int64, quantity, unitQuota int, payMoneyUSD float64, payCurrency string) (*NowPaymentsInvoice, error) {
+	if !IsNowPaymentsTopUpEnabled() {
+		return nil, errors.New("NOWPayments is not configured")
+	}
+	if quantity <= 0 || quantity > model.MaxRedemptionPurchaseCount || unitAmount <= 0 || unitQuota <= 0 || payMoneyUSD <= 0 || math.IsNaN(payMoneyUSD) || math.IsInf(payMoneyUSD, 0) {
+		return nil, errors.New("invalid redemption purchase")
+	}
+	if unitAmount > math.MaxInt64/int64(quantity) {
+		return nil, errors.New("redemption purchase amount is outside the supported range")
+	}
+	user, err := model.GetUserById(userID, true)
+	if err != nil || user == nil {
+		return nil, errors.New("user not found")
+	}
+	priceUSD := decimal.NewFromFloat(payMoneyUSD)
+	tradeID, err := common.GenerateRandomCharsKey(24)
+	if err != nil {
+		return nil, err
+	}
+	tradeNo := "nowpayments-redemption-" + tradeID
+	callbackURL, err := nowPaymentsCallbackURL()
+	if err != nil {
+		return nil, err
+	}
+	payCurrency = strings.ToLower(strings.TrimSpace(payCurrency))
+	if !setting.IsValidNowPaymentsCurrency(payCurrency) {
+		currencies := setting.GetNowPaymentsPayCurrencies()
+		if len(currencies) == 0 {
+			return nil, errors.New("no NOWPayments currency is configured")
+		}
+		payCurrency = currencies[0]
+	}
+	invoice, err := createNowPaymentsPayment(ctx, nowPaymentsCreateRequest{
+		PriceAmount:      json.Number(priceUSD.StringFixed(8)),
+		PriceCurrency:    nowPaymentsPriceCurrency,
+		PayCurrency:      payCurrency,
+		OrderID:          tradeNo,
+		OrderDescription: fmt.Sprintf("Redemption codes %d x %d", unitAmount, quantity),
+		IPNCallbackURL:   callbackURL,
+	})
+	if err != nil {
+		return nil, err
+	}
+	now := common.GetTimestamp()
+	topUp := &model.TopUp{
+		UserId: userID, Amount: unitAmount * int64(quantity), Money: priceUSD.InexactFloat64(),
+		TradeNo: tradeNo, PaymentMethod: model.PaymentMethodNowPayments,
+		PaymentProvider: model.PaymentProviderNowPayments, CreateTime: now,
+		Status: common.TopUpStatusPending, OrderType: model.OrderTypeRedemption,
+		RedemptionQuota: unitQuota, RedemptionCount: quantity, RedemptionAmount: unitAmount,
+		RedemptionName: fmt.Sprintf("Code %d U%d", unitAmount, userID),
+	}
+	payment := &model.NowPaymentsPayment{
+		PaymentID: invoice.PaymentID, OrderID: tradeNo, PayCurrency: invoice.PayCurrency,
+		PriceCurrency: invoice.PriceCurrency, PriceAmount: invoice.PriceAmount,
+		PayAmount: invoice.PayAmount, CreditedQuota: 1, PayAddress: invoice.PayAddress,
+		PayinExtraID: invoice.PayinExtraID, GatewayStatus: invoice.Status,
+		Status: model.NowPaymentsPaymentStatusPending, ExpiresAt: invoice.ExpiresAt, CreateTime: now,
 	}
 	if err := model.CreateNowPaymentsTopUp(topUp, payment); err != nil {
 		return nil, err
@@ -802,10 +879,6 @@ func HandleNowPaymentsWebhook(payload []byte, callerIP string) error {
 	if err != nil {
 		return err
 	}
-	eventActuallyPaid, err := decimal.NewFromString(actuallyPaid)
-	if err != nil {
-		return err
-	}
 	if event.OrderID != payment.OrderID || !strings.EqualFold(event.PayCurrency, payment.PayCurrency) ||
 		!strings.EqualFold(event.PriceCurrency, payment.PriceCurrency) || !eventPrice.Equal(storedPrice) ||
 		!eventPayAmount.Equal(storedPayAmount) || event.PayAddress != payment.PayAddress ||
@@ -819,9 +892,6 @@ func HandleNowPaymentsWebhook(payload []byte, callerIP string) error {
 	status := strings.ToLower(strings.TrimSpace(event.PaymentStatus))
 	switch status {
 	case "finished":
-		if eventActuallyPaid.LessThan(storedPayAmount) {
-			return errors.New("NOWPayments finished payment is below the quoted amount")
-		}
 		if payment.OrderType == model.NowPaymentsOrderTypeTopUp {
 			_, err = model.SettleNowPaymentsTopUp(paymentID, status, actuallyPaid, string(canonical), callerIP)
 			return err
@@ -833,12 +903,28 @@ func HandleNowPaymentsWebhook(payload []byte, callerIP string) error {
 		if parseErr != nil || !paid.IsPositive() {
 			return errors.New("NOWPayments subscription payment is empty")
 		}
+		if paid.LessThan(storedPayAmount) {
+			return errors.New("NOWPayments subscription payment is below the quoted amount")
+		}
 		return model.CompleteNowPaymentsSubscription(paymentID, status, actuallyPaid, string(canonical))
 	case "expired":
 		return model.FailNowPaymentsPayment(paymentID, status, actuallyPaid, string(canonical), model.NowPaymentsPaymentStatusExpired)
-	case "failed", "refunded", "wrong_amount":
+	case "failed", "refunded":
 		return model.FailNowPaymentsPayment(paymentID, status, actuallyPaid, string(canonical), model.NowPaymentsPaymentStatusFailed)
-	case "waiting", "confirming", "confirmed", "sending", "partially_paid":
+	case "partially_paid", "wrong_amount":
+		if payment.OrderType == model.NowPaymentsOrderTypeTopUp && payment.TopUpID != nil {
+			topUp := model.GetTopUpById(*payment.TopUpID)
+			paid, parseErr := decimal.NewFromString(actuallyPaid)
+			if topUp != nil && !topUp.IsRedemptionPurchase() && parseErr == nil && paid.IsPositive() {
+				_, err = model.SettleNowPaymentsTopUp(paymentID, status, actuallyPaid, string(canonical), callerIP)
+				return err
+			}
+		}
+		if status == "wrong_amount" {
+			return model.FailNowPaymentsPayment(paymentID, status, actuallyPaid, string(canonical), model.NowPaymentsPaymentStatusFailed)
+		}
+		return model.UpdateNowPaymentsPendingState(paymentID, status, actuallyPaid, string(canonical))
+	case "waiting", "confirming", "confirmed", "sending":
 		return model.UpdateNowPaymentsPendingState(paymentID, status, actuallyPaid, string(canonical))
 	default:
 		return fmt.Errorf("unsupported NOWPayments payment status %q", status)
